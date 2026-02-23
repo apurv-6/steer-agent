@@ -1,0 +1,31 @@
+{
+  "name": "@steer-agent-tool/cursor-extension",
+  "version": "0.1.0",
+  "displayName": "Steer Agent Tool",
+  "description": "Cursor extension for steer-agent-tool",
+  "publisher": "steer-agent-tool",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "steer-agent-tool.helloWorld",
+        "title": "Steer Agent: Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@steer-agent-tool/core": "*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}

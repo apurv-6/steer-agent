@@ -1,0 +1,24 @@
+{
+  "name": "@steer-agent-tool/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@steer-agent-tool/core": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.6"
+  }
+}

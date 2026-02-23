@@ -1,0 +1,19 @@
+{
+  "name": "@steer-agent-tool/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "steer-agent": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@steer-agent-tool/core": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.6"
+  }
+}
