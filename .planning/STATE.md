@@ -1,27 +1,26 @@
 # Project State: SteerAgent
 
 ## Current Phase
-**Phase**: 1 — Core Infrastructure & Pilot Reliability
+**Phase**: 1 — Gate Loop Hardening
 **Status**: Not started
-**Plan**: Not yet created
+**Plan**: Not yet executing
 
 ## Session Context
 - GSD workflow initialized: 2026-02-24
-- PROJECT.md committed: bd2b7a9
-- config.json committed: b99a3e3
-- Research committed: 25a474e
-- REQUIREMENTS.md committed: cc077c4
-- ROADMAP.md committed: (pending)
+- CTO review: 2026-02-24 — cut from 4 phases/61 requirements to 2 phases/16 requirements
+- Original roadmap preserved at ROADMAP-original.md
+- Architecture research preserved at .planning/research/ (available when scaling demands it)
 
 ## Key Decisions
-- Zod 3.x frozen (MCP SDK requires it)
-- EventBus + SessionStore in core (not extension-specific)
-- File-based IPC for hook-to-extension bridge (signal file + FileSystemWatcher)
-- MCP is primary integration path (chat participant may fail in Cursor)
-- Advisory mode default (suggest-only, not blocking by default)
-- YOLO execution mode, comprehensive depth, quality models
+- Ship what works, measure, react (no speculative architecture)
+- No EventBus, SessionStore, PersistenceAdapter — direct function calls
+- No hook-to-extension bridge — they operate independently
+- No rubric scoring upgrade — ship current section-presence, calibrate from pilot data
+- MCP is primary integration path
+- Advisory mode default (block only score <= 3)
+- Telemetry calls append() directly — no EventBus subscription pattern
 
 ## Notes
-- v0.2 code exists with working scoring, patching, routing — needs cohesion, not rewrite
-- CoinSwitch pilot: 14 devs, measure throughput/cost/first-pass success
-- Hook `user_message` field needs empirical Cursor testing
+- v0.2 code exists with working scoring, patching, routing, panels, MCP, CLI, hook
+- CoinSwitch pilot: 14 devs, measure gate calls/day, avg score, block rate
+- Phase 2 scope determined by 2 weeks of pilot data, not pre-planned
