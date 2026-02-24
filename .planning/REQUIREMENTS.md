@@ -15,8 +15,8 @@
 
 ### MCP Server (MCP)
 
-- [ ] **MCP-03**: Stdout audit — no stray console.log; global error handlers (uncaughtException, SIGINT, SIGTERM)
-- [ ] **MCP-04**: Smoke test validates BLOCKED, NEEDS_INFO, READY, and server survival
+- [x] **MCP-03**: Stdout audit — no stray console.log; global error handlers (uncaughtException, SIGINT, SIGTERM)
+- [x] **MCP-04**: Smoke test validates BLOCKED, NEEDS_INFO, READY, and server survival
 
 ### Extension (EXT)
 
@@ -24,7 +24,7 @@
 
 ### Reliability (REL)
 
-- [ ] **REL-01**: MCP server stays alive on errors
+- [x] **REL-01**: MCP server stays alive on errors
 - [ ] **REL-02**: Extension degrades gracefully when core throws
 - [ ] **REL-03**: Chat participant wrapped in try/catch — if it fails, MCP is the path
 
