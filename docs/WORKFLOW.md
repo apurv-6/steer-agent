@@ -20,9 +20,9 @@ With `~/.cursor/hooks.json` configured:
 4. **If NEEDS_INFO (score 4-6):** prompt goes through, but you see a message with follow-up suggestions.
 5. **If READY (score ≥ 7):** prompt goes through with a brief score/model/cost summary.
 
-### Path B: Manual (@steer)
+### Path B: Manual (/steer)
 
-1. In Cursor chat, type: `@steer fix the login bug in auth module`
+1. In Cursor chat, type: `/steer fix the login bug in auth module`
 2. See inline results: status, score, missing sections, follow-ups, patched prompt
 3. Click **"Apply to Chat"** to use the patched prompt
 4. Open the Wizard panel (sidebar) to answer follow-ups and re-evaluate

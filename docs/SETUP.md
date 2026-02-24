@@ -125,7 +125,7 @@ bash hooks/demo.sh
 
 ### 5d. MCP check
 
-In Cursor chat, type: `@steer evaluate my prompt: fix the bug`
+In Cursor chat, type: `/steer evaluate my prompt: fix the bug`
 
 You should see a gate result with score, status, and model suggestion.
 

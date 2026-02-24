@@ -27,7 +27,7 @@
    If missing: `npm run build --workspaces`
 
 4. **Check Cursor version supports hooks:**
-   Cursor hooks (`beforeSubmitPrompt`) were added in recent builds. If your Cursor doesn't support hooks, you'll need to use `@steer` in chat instead.
+   Cursor hooks (`beforeSubmitPrompt`) were added in recent builds. If your Cursor doesn't support hooks, you'll need to use `/steer` in chat instead.
 
 5. **Check Cursor logs:**
    `Cmd+Shift+P` → "Developer: Toggle Developer Tools" → Console tab.
@@ -46,7 +46,7 @@ Cursor's `beforeSubmitPrompt` hook receives the prompt via stdin as JSON. The ho
 ### If prompt is empty in hook
 
 The hook allows through with a guidance message. The fallback workflow is:
-1. Use `@steer` in Cursor chat to gate prompts manually
+1. Use `/steer` in Cursor chat to gate prompts manually
 2. Or use `Steer Agent: Suggest` from command palette
 3. The hook still provides value as an awareness prompt
 

@@ -75,7 +75,7 @@ Developer writes prompt
 Gates every prompt submission. Zero friction after install.
 
 ### 2. MCP Server
-Use `@steer` in Cursor chat to evaluate prompts on demand.
+Use `/steer` in Cursor chat to evaluate prompts on demand.
 
 ### 3. CLI
 ```bash
