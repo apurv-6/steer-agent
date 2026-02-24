@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this to ~/.cursor/hooks.json to enable SteerAgent prompt gating in Cursor",
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "type": "command",
+        "command": "node /Users/devapu/steer-agent-tool/hooks/steer-gate-hook.js",
+        "timeout": 5000
+      }
+    ]
+  }
+}
