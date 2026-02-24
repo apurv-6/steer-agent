@@ -1,5 +1,5 @@
 {
-  "name": "@steer-agent-tool/cursor-extension",
+  "name": "steer-agent-tool-extension",
   "version": "0.1.0",
   "displayName": "Steer Agent Tool",
   "description": "Cursor extension for steer-agent-tool",
@@ -7,25 +7,83 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
-        "command": "steer-agent-tool.helloWorld",
-        "title": "Steer Agent: Hello World"
+        "command": "steeragent.enable",
+        "title": "Steer Agent: Enable",
+        "icon": "$(play)"
+      },
+      {
+        "command": "steeragent.disable",
+        "title": "Steer Agent: Disable",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "steeragent.toggle",
+        "title": "Steer Agent: Toggle"
+      },
+      {
+        "command": "steeragent.suggest",
+        "title": "Steer Agent: Suggest",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "steeragent.applyToChat",
+        "title": "Steer Agent: Apply to Chat",
+        "icon": "$(send)"
       }
-    ]
+    ],
+    "chatParticipants": [
+      {
+        "id": "steeragent.steer",
+        "name": "steer",
+        "description": "Score and patch your AI prompts before sending",
+        "isDefault": false
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "steeragent",
+          "title": "Steer Agent",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "steeragent": [
+        {
+          "type": "webview",
+          "id": "steeragent.statusPanel",
+          "name": "Status"
+        },
+        {
+          "type": "webview",
+          "id": "steeragent.wizardPanel",
+          "name": "Wizard"
+        }
+      ]
+    }
   },
   "scripts": {
-    "build": "tsc -p .",
-    "typecheck": "tsc --noEmit"
+    "build": "node esbuild.js",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && vsce package --no-dependencies"
   },
   "dependencies": {
     "@steer-agent-tool/core": "*"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0"
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "2.21.1",
+    "esbuild": "^0.27.3"
   }
 }

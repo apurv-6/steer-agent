@@ -1,0 +1,11 @@
+{
+  "description": "Critical file paths that trigger high-tier model routing when changed. Maintain this list for your team.",
+  "paths": [
+    "src/auth",
+    "src/payments",
+    "src/core",
+    "src/security",
+    "packages/core/src/gate.ts",
+    "packages/core/src/scorePrompt.ts"
+  ]
+}

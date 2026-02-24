@@ -11,7 +11,7 @@ Get from zero to working in 15 minutes. This guide targets the CoinSwitch pilot 
 ## Step 1: Clone and Build
 
 ```bash
-git clone <repo-url> steer-agent-tool
+git clone git@github.com:apurv-6/steer-agent.git steer-agent
 cd steer-agent-tool
 npm install
 npm run build --workspaces

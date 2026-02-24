@@ -13,12 +13,16 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "node src/smoke.mjs"
   },
   "dependencies": {
-    "@steer-agent-tool/core": "*"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@steer-agent-tool/core": "*",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsup": "^8.3.6"
   }
 }

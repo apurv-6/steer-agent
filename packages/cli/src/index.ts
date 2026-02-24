@@ -1,4 +1,76 @@
-import { createConfig } from "@steer-agent-tool/core";
+import { VERSION } from "@steer-agent-tool/core";
 
-const config = createConfig("cli");
-console.log(`steer-agent-tool CLI v${config.version}`);
+const [command] = process.argv.slice(2);
+
+switch (command) {
+  case "steer":
+    await runSteerCmd();
+    break;
+  case "init":
+    await runInit();
+    break;
+  case "mcp":
+    await runMcp();
+    break;
+  case "metrics":
+    await runMetricsCmd();
+    break;
+  case "--version":
+  case "-v":
+    console.log(`steer-agent-tool v${VERSION}`);
+    break;
+  default:
+    printUsage();
+    break;
+}
+
+async function runInit(): Promise<void> {
+  const { mkdirSync, existsSync } = await import("node:fs");
+
+  // Check Node version
+  const [major] = process.versions.node.split(".").map(Number);
+  if (major < 18) {
+    console.error(`Node.js >= 18 required (found ${process.versions.node})`);
+    process.exit(1);
+  }
+  console.log(`Node.js ${process.versions.node} — OK`);
+
+  // Create data directory
+  if (!existsSync("./data")) {
+    mkdirSync("./data", { recursive: true });
+    console.log("Created ./data directory");
+  } else {
+    console.log("./data directory already exists");
+  }
+
+  console.log("\nSetup complete! Next steps:");
+  console.log("  1. Install the Cursor extension from packages/cursor-extension");
+  console.log('  2. Run "npx steer-agent-tool mcp" to start the MCP server');
+  console.log('  3. Run "npx steer-agent-tool metrics" to view telemetry');
+}
+
+async function runSteerCmd(): Promise<void> {
+  const { runSteer } = await import("./steer.js");
+  await runSteer();
+}
+
+async function runMcp(): Promise<void> {
+  const { startServer } = await import("@steer-agent-tool/mcp-server");
+  await startServer();
+}
+
+async function runMetricsCmd(): Promise<void> {
+  const { runMetrics } = await import("./metrics.js");
+  await runMetrics();
+}
+
+function printUsage(): void {
+  console.log(`steer-agent-tool v${VERSION}
+
+Usage:
+  steer-agent-tool steer      Interactive prompt scoring and patching
+  steer-agent-tool init       Set up data directory and verify environment
+  steer-agent-tool mcp        Start the MCP server (stdio)
+  steer-agent-tool metrics    Show telemetry metrics
+  steer-agent-tool --version  Print version`);
+}

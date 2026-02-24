@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { VERSION, telemetry } from "@steer-agent-tool/core";
 import { SessionState, type GateMode } from "./SessionState";
 import { StatusPanel } from "./StatusPanel";
 import { WizardPanel } from "./WizardPanel";
-import { callGate } from "./gateClient";
+import { callGate, type GateResult } from "./gateClient";
 
 let sessionState: SessionState;
 let wizardPanel: WizardPanel;
@@ -326,6 +327,52 @@ export function activate(context: vscode.ExtensionContext) {
       });
     }),
   );
+
+  // Watch .steer/last-gate.json bridge file written by the Cursor hook
+  const bridgeWatcher = vscode.workspace.createFileSystemWatcher("**/.steer/last-gate.json");
+  let lastBridgeTimestamp = 0;
+
+  const handleBridgeFile = (uri: vscode.Uri) => {
+    try {
+      const raw = fs.readFileSync(uri.fsPath, "utf-8");
+      const bridge = JSON.parse(raw) as {
+        timestamp: number;
+        draftPrompt: string;
+        gateResult: GateResult;
+        mode: string;
+      };
+
+      // Deduplicate: skip if we already processed this exact timestamp
+      if (bridge.timestamp <= lastBridgeTimestamp) return;
+      lastBridgeTimestamp = bridge.timestamp;
+
+      const gr = bridge.gateResult;
+      const turnId = (sessionState.data.turnId || 0) + 1;
+
+      sessionState.update({
+        gateCallCount: sessionState.data.gateCallCount + 1,
+        turnId,
+        lastModelTier: gr.modelSuggestion.tier,
+        lastPatchedPrompt: gr.patchedPrompt,
+        lastScore: gr.score,
+        lastStatus: gr.status,
+      });
+
+      context.workspaceState.update("steer.turnId", turnId);
+      context.workspaceState.update("steer.gateCallCount", sessionState.data.gateCallCount);
+
+      wizardPanel.setDraftPrompt(bridge.draftPrompt);
+      wizardPanel.updateGateResult(gr);
+
+      appendTelemetry(gr, bridge.mode);
+    } catch {
+      // Bridge read is best-effort
+    }
+  };
+
+  bridgeWatcher.onDidChange(handleBridgeFile);
+  bridgeWatcher.onDidCreate(handleBridgeFile);
+  context.subscriptions.push(bridgeWatcher);
 
   context.subscriptions.push(sessionState);
 }
