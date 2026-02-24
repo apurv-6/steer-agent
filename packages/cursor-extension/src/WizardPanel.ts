@@ -182,7 +182,7 @@ export class WizardPanel implements vscode.WebviewViewProvider {
     <div class="meta">Score: <strong>${r.score}/10</strong></div>
     ${r.missing.length ? `<div class="meta">Missing: ${r.missing.join(", ")}</div>` : ""}
     <div class="next-action">${esc(nextActionText)}</div>
-  ` : `<h3>Steer Gate</h3><div class="meta">Run <strong>Steer Agent: Suggest</strong> or use <strong>@steer</strong> in chat to evaluate a prompt.</div>`}
+  ` : `<h3>Steer Gate</h3><div class="meta">Run <strong>Steer Agent: Suggest</strong> or use <strong>/steer</strong> in chat to evaluate a prompt.</div>`}
 
   ${questionsHtml ? `<h3>Follow-up Questions</h3>${questionsHtml}` : ""}
 

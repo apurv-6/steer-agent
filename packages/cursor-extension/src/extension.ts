@@ -59,11 +59,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.showErrorMessage(`[steer] WizardPanel registration failed: ${err}`);
   }
 
-  // Register @steer chat participant (wrapped — may not be available in all Cursor versions)
+  // Register /steer chat participant (wrapped — may not be available in all Cursor versions)
   try {
     const participant = vscode.chat.createChatParticipant("steeragent.steer", async (request, _context, stream, _token) => {
       if (!request.prompt) {
-        stream.markdown("Please provide a prompt to evaluate. Usage: `@steer <your prompt>`");
+        stream.markdown("Please provide a prompt to evaluate. Usage: `/steer <your prompt>`");
         return;
       }
 

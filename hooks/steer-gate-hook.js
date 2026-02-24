@@ -51,7 +51,7 @@ if (!promptText) {
 if (!promptText) {
   process.stdout.write(JSON.stringify({
     continue: true,
-    user_message: "[Steer] No prompt text detected. Use @steer in chat to gate prompts.",
+    user_message: "[Steer] No prompt text detected. Use /steer in chat to gate prompts.",
   }));
   process.exit(0);
 }
@@ -131,7 +131,7 @@ if (gateResult.status === "BLOCKED") {
       ...gateResult.missing.map((m) => `  ## ${m}`),
       questions ? `\nAnswer these:\n${questions}` : "",
       "",
-      "Use @steer in chat to iterate.",
+      "Use /steer in chat to iterate.",
     ].filter(Boolean).join("\n"),
   };
 } else if (gateResult.status === "NEEDS_INFO") {
