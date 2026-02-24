@@ -130,7 +130,7 @@ Tasks:
 
 | Phase | Plans | Status | Completed |
 |-------|-------|--------|-----------|
-| 1. Gate Loop Hardening | 0/3 | Not started | - |
+| 1. Gate Loop Hardening | 2/3 | In progress | - |
 | 2. Pilot Feedback | TBD | Blocked on Phase 1 data | - |
 
 ## What Success Looks Like

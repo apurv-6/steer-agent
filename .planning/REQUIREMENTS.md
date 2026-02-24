@@ -8,10 +8,10 @@
 
 ### Hook (HOOK)
 
-- [ ] **HOOK-01**: CJS hook script for Cursor beforeSubmitPrompt — reads stdin, runs gate(), returns {continue: boolean}
-- [ ] **HOOK-02**: Blocking policy: score <= 3 → continue:false; score 4-6 → true; score >= 7 → true
-- [ ] **HOOK-04**: Hook completes within 5-second Cursor timeout
-- [ ] **HOOK-05**: Example cursor-hooks.json shipped with project
+- [x] **HOOK-01**: CJS hook script for Cursor beforeSubmitPrompt — reads stdin, runs gate(), returns {continue: boolean}
+- [x] **HOOK-02**: Blocking policy: score <= 3 → continue:false; score 4-6 → true; score >= 7 → true
+- [x] **HOOK-04**: Hook completes within 5-second Cursor timeout
+- [x] **HOOK-05**: Example cursor-hooks.json shipped with project
 
 ### MCP Server (MCP)
 
@@ -20,21 +20,21 @@
 
 ### Extension (EXT)
 
-- [ ] **EXT-05**: Graceful error handling — try/catch on all registrations, error notifications instead of silent failure
+- [x] **EXT-05**: Graceful error handling — try/catch on all registrations, error notifications instead of silent failure
 
 ### Reliability (REL)
 
 - [x] **REL-01**: MCP server stays alive on errors
-- [ ] **REL-02**: Extension degrades gracefully when core throws
-- [ ] **REL-03**: Chat participant wrapped in try/catch — if it fails, MCP is the path
+- [x] **REL-02**: Extension degrades gracefully when core throws
+- [x] **REL-03**: Chat participant wrapped in try/catch — if it fails, MCP is the path
 
 ### Session (SESS)
 
-- [ ] **SESS-02**: Session taskId persists across Cursor restarts via workspaceState
+- [x] **SESS-02**: Session taskId persists across Cursor restarts via workspaceState
 
 ### Routing (ROUT)
 
-- [ ] **ROUT-04**: Model suggestion includes tier, modelName, and provider
+- [x] **ROUT-04**: Model suggestion includes tier, modelName, and provider
 
 ### Telemetry (TELE)
 
