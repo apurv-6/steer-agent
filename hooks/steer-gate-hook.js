@@ -56,6 +56,21 @@ if (!promptText) {
   process.exit(0);
 }
 
+// Detect @steer prefix — this is the old syntax, NOT the /steer slash command.
+// The /steer slash command is handled by the Cursor extension chat participant
+// (which calls the gate directly). Prompts typed with @steer should pass through
+// without gating, since only /steer invocations should activate the steer gate.
+const promptTrimmed = promptText.trimStart();
+const isAtSteerPrefix = /^@steer\b/i.test(promptTrimmed);
+
+if (isAtSteerPrefix) {
+  process.stdout.write(JSON.stringify({
+    continue: true,
+    user_message: "[Steer] @steer is not a command. Use /steer in chat to evaluate prompts.",
+  }));
+  process.exit(0);
+}
+
 // Load core
 let gate;
 try {
