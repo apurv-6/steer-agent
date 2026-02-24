@@ -27,10 +27,10 @@ SteerAgent v1 is built in 4 phases: first harden the core infrastructure (EventB
 **Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: Core primitives — EventBus, SessionStore, PersistenceAdapter, constants, typed events
-- [ ] 01-02: Canonical gate with transparent scoring — enhance gate() to return per-criterion breakdown, wire EventBus emission
-- [ ] 01-03: Hook + bridge — update steer-gate-hook.js to write signal file, build HookBridge with FileSystemWatcher in extension
-- [ ] 01-04: MCP hardening + telemetry fix — stdout audit, error handlers, signal handling, telemetry path fix, smoke tests
+- [ ] 01-01-PLAN.md — Core primitives: EventBus, SessionStore, PersistenceAdapter, constants, typed events
+- [ ] 01-02-PLAN.md — Canonical gate with transparent scoring, EventBus emission, telemetry auto-capture
+- [ ] 01-03-PLAN.md — Hook signal file write + HookBridge FileSystemWatcher + extension hardening
+- [ ] 01-04-PLAN.md — MCP server hardening: stdout audit, error handlers, signal handling, smoke tests
 
 ### Phase 2: Command System & Scoring Upgrade
 **Goal**: The /steer command system works, scoring uses 5-dimension rubric instead of section-presence, prompts are patched with 7 sections, and project config drives thresholds and weights.
