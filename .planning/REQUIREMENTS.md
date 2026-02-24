@@ -38,8 +38,8 @@
 
 ### Telemetry (TELE)
 
-- [ ] **TELE-01**: JSONL append telemetry — every gate call logged
-- [ ] **TELE-02**: Telemetry path uses context.globalStorageUri in extension (not relative)
+- [x] **TELE-01**: JSONL append telemetry — every gate call logged
+- [x] **TELE-02**: Telemetry path uses context.globalStorageUri in extension (not relative)
 
 ### Docs (DOCS)
 
