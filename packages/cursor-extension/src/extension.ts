@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "node:path";
 import { VERSION, telemetry } from "@steer-agent-tool/core";
 import { SessionState, type GateMode } from "./SessionState";
 import { StatusPanel } from "./StatusPanel";
@@ -7,10 +8,15 @@ import { callGate } from "./gateClient";
 
 let sessionState: SessionState;
 let wizardPanel: WizardPanel;
+let telemetryPath: string;
 
 export function activate(context: vscode.ExtensionContext) {
   sessionState = new SessionState(context.workspaceState);
   wizardPanel = new WizardPanel(sessionState);
+
+  // Set up telemetry path in extension global storage
+  const telemetryDir = context.globalStorageUri.fsPath;
+  telemetryPath = path.join(telemetryDir, "telemetry.jsonl");
 
   // Restore persisted taskId or generate a fresh one
   const persistedTaskId = context.workspaceState.get<string>("steer.taskId");
@@ -90,6 +96,9 @@ export function activate(context: vscode.ExtensionContext) {
       context.workspaceState.update("steer.taskId", sessionState.data.taskId);
       context.workspaceState.update("steer.turnId", turnId);
       context.workspaceState.update("steer.gateCallCount", sessionState.data.gateCallCount);
+
+      // Telemetry (best-effort, never crashes)
+      appendTelemetry(gateResult, sessionState.data.mode);
 
       wizardPanel.setDraftPrompt(request.prompt);
       wizardPanel.updateGateResult(gateResult);
@@ -219,6 +228,9 @@ export function activate(context: vscode.ExtensionContext) {
       context.workspaceState.update("steer.turnId", turnId);
       context.workspaceState.update("steer.gateCallCount", sessionState.data.gateCallCount);
 
+      // Telemetry (best-effort, never crashes)
+      appendTelemetry(gateResult, sessionState.data.mode);
+
       wizardPanel.setDraftPrompt(draftPrompt);
       wizardPanel.updateGateResult(gateResult);
 
@@ -309,7 +321,7 @@ export function activate(context: vscode.ExtensionContext) {
         mode: sessionState.data.mode,
       };
 
-      telemetry.append(event).catch(() => {
+      telemetry.append(event, telemetryPath).catch(() => {
         // Telemetry is best-effort
       });
     }),
@@ -319,6 +331,27 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+function appendTelemetry(gateResult: ReturnType<typeof callGate>, mode: string): void {
+  try {
+    telemetry.append({
+      timestamp: new Date().toISOString(),
+      taskId: gateResult.taskId,
+      turnId: gateResult.turnId,
+      mode,
+      score: gateResult.score,
+      status: gateResult.status,
+      missing: gateResult.missing,
+      modelTier: gateResult.modelSuggestion.tier,
+      estimatedCostUsd: gateResult.costEstimate.estimatedCostUsd,
+      hasGitImpact: gateResult.gitImpact !== null,
+    }, telemetryPath).catch(() => {
+      // Telemetry must never crash the extension
+    });
+  } catch {
+    // Telemetry must never crash the extension
+  }
+}
 
 function generateId(): string {
   return `task_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
