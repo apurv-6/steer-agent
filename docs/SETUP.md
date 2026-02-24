@@ -12,7 +12,7 @@ Get from zero to working in 15 minutes. This guide targets the CoinSwitch pilot 
 
 ```bash
 git clone git@github.com:apurv-6/steer-agent.git steer-agent
-cd steer-agent-tool
+cd steer-agent
 npm install
 npm run build --workspaces
 ```
@@ -31,7 +31,7 @@ bash hooks/demo.sh      # 3 gate calls: BLOCKED, NEEDS_INFO, READY
 ```bash
 cd packages/cursor-extension
 npm run package
-cursor --install-extension steer-agent-tool-extension-0.1.0.vsix
+cursor --install-extension steer-agent-extension-0.1.0.vsix
 ```
 
 After install, restart Cursor. You should see **"Steer Agent"** in the Activity Bar with two panels:
@@ -54,7 +54,7 @@ Then edit `~/.cursor/hooks.json` and update the path to match your installation:
   "hooks": {
     "beforeSubmitPrompt": [{
       "type": "command",
-      "command": "node /absolute/path/to/steer-agent-tool/hooks/steer-gate-hook.js",
+      "command": "node /absolute/path/to/steer-agent/hooks/steer-gate-hook.js",
       "timeout": 5000
     }]
   }
@@ -76,9 +76,9 @@ Add to your Cursor MCP settings (`~/.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "steer-agent-tool": {
+    "steer": {
       "command": "node",
-      "args": ["/absolute/path/to/steer-agent-tool/packages/mcp-server/dist/index.js"]
+      "args": ["/absolute/path/to/steer-agent/packages/mcp-server/dist/index.js"]
     }
   }
 }
@@ -146,7 +146,7 @@ You should see a gate result with score, status, and model suggestion.
 ### Extension not showing
 
 - Rebuild: `cd packages/cursor-extension && npm run package`
-- Reinstall: `cursor --install-extension steer-agent-tool-extension-0.1.0.vsix`
+- Reinstall: `cursor --install-extension steer-agent-extension-0.1.0.vsix`
 - Check Output panel > "Steer Agent" for error messages
 
 ### Permission errors on telemetry
