@@ -1,13 +1,14 @@
 // ── Modes ────────────────────────────────────────────────────────────
-export type Mode = "chat" | "code" | "review" | "plan" | "design" | "bugfix" | "debug";
-export type GateMode = "dev" | "debug" | "bugfix" | "design" | "refactor";
+export type Mode = "chat" | "code" | "review" | "plan" | "design" | "bugfix" | "debug" | "feature" | "refactor";
+export type GateMode = "dev" | "debug" | "bugfix" | "design" | "refactor" | "feature";
 
 export const MODE_MAP: Record<GateMode, Mode> = {
   dev: "code",
   debug: "debug",
   bugfix: "bugfix",
   design: "design",
-  refactor: "code",
+  refactor: "refactor",
+  feature: "feature",
 };
 
 // ── Score ────────────────────────────────────────────────────────────
@@ -101,4 +102,45 @@ export interface GateInput {
   gitDiffStat?: string;       // raw output of `git diff --stat`
   gitDiffNameOnly?: string;   // raw output of `git diff --name-only`
   criticalPaths?: string[];   // from criticalModules.json
+}
+
+// ── Codebase Map ─────────────────────────────────────────────────────
+export interface FileInfo {
+  path: string;
+  role: string; // controller, service, repository, etc.
+  loc?: number;
+  imports?: string[];
+  testFile?: string;
+  lastModified?: string;
+}
+
+export interface ModuleInfo {
+  name: string;
+  path: string;
+  type: string; // feature-module, shared-module, etc.
+  critical: boolean;
+  files: string[];
+  testDir?: string;
+}
+
+export interface DependencyGraph {
+  [filePath: string]: {
+    imports: string[];
+    importedBy: string[];
+    testFile?: string;
+  };
+}
+
+export interface ChangeCoupling {
+  [filePath: string]: {
+    [relatedFile: string]: number; // 0.0 to 1.0 frequency
+  };
+}
+
+export interface CodebaseMap {
+  root: string;
+  modules: Record<string, ModuleInfo>;
+  files: Record<string, FileInfo>;
+  dependencies: DependencyGraph;
+  coupling: ChangeCoupling;
 }
