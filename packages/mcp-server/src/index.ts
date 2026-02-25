@@ -24,6 +24,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { gate } from "./gate.js";
 import { VERSION } from "@steer-agent-tool/core";
+import { InitSchema, handleInit } from "./tools/init.js";
+import { StartSchema, handleStart } from "./tools/start.js";
 
 const server = new McpServer({
   name: "steer-agent-tool",
@@ -81,6 +83,22 @@ server.tool(
   "Score a draft prompt, generate follow-up questions, patch the prompt, suggest a model tier, and estimate cost. Returns full GateResult with session tracking, git impact, and next action guidance.",
   GateParamsSchema,
   handleGate,
+);
+
+// @ts-ignore
+server.tool(
+  "steer.init",
+  "Initialize SteerAgent in the current directory. Creates .steer/ folder and config.",
+  InitSchema,
+  handleInit,
+);
+
+// @ts-ignore
+server.tool(
+  "steer.start",
+  "Start a new task with intelligent context gathering.",
+  StartSchema,
+  handleStart,
 );
 
 export async function startServer(): Promise<void> {

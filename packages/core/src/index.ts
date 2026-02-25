@@ -22,6 +22,11 @@ export type {
   GateResult,
   GateInput,
   TelemetryEvent,
+  CodebaseMap,
+  ModuleInfo,
+  FileInfo,
+  DependencyGraph,
+  ChangeCoupling,
 } from "./types.js";
 export { MODE_MAP } from "./types.js";
 
@@ -40,3 +45,11 @@ export { gate } from "./gate.js";
 
 // Telemetry
 export * as telemetry from "./telemetry.js";
+
+// New V2 Exports
+export { buildCodebaseMap } from "./codemap-static.js";
+export { createNewTask, transitionStep, INITIAL_STATE } from "./state.js";
+export type { TaskState, StepName, StepStatus } from "./state.js";
+export { initSteer } from "./init.js";
+export { startTask } from "./start.js";
+export type { StartOptions } from "./start.js";
