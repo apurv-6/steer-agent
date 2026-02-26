@@ -25,6 +25,16 @@ import { z } from "zod";
 import { gate } from "./gate.js";
 import { VERSION } from "@steer-agent-tool/core";
 
+// v2: Workflow tool handlers
+import { InitParamsSchema, handleInit } from "./tools/init.js";
+import { StartParamsSchema, handleStart } from "./tools/start.js";
+import { PlanParamsSchema, handlePlan } from "./tools/plan.js";
+import { ExecuteParamsSchema, handleExecute } from "./tools/execute.js";
+import { VerifyParamsSchema, handleVerify } from "./tools/verify.js";
+import { StatusParamsSchema, handleStatus } from "./tools/status.js";
+import { MapParamsSchema, handleMap } from "./tools/map.js";
+import { ResumeParamsSchema, handleResume } from "./tools/resume.js";
+
 const server = new McpServer({
   name: "steer-agent-tool",
   version: VERSION,
@@ -81,6 +91,72 @@ server.tool(
   "Score a draft prompt, generate follow-up questions, patch the prompt, suggest a model tier, and estimate cost. Returns full GateResult with session tracking, git impact, and next action guidance.",
   GateParamsSchema,
   handleGate,
+);
+
+// === v2: Workflow tools ===
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.init",
+  "Initialize SteerAgent in a repository. Creates .steer/ folder with config, templates, hooks, and builds a codebase map.",
+  InitParamsSchema,
+  handleInit,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.start",
+  "Start a new task. Loads template for mode, gathers codebase context, and generates intelligent follow-up questions.",
+  StartParamsSchema,
+  handleStart,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.plan",
+  "Propose an execution plan with impact preview. Assembles the structured prompt from answers and context. Requires approval before execution.",
+  PlanParamsSchema,
+  handlePlan,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.execute",
+  "Manage execution phase. Use action='approve' to start execution, action='complete' to mark it done and move to verification.",
+  ExecuteParamsSchema,
+  handleExecute,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.verify",
+  "Verify task completion. If passed=true, task is complete and logged to history. If passed=false, starts a new round.",
+  VerifyParamsSchema,
+  handleVerify,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.status",
+  "Show current task progress — step tracker with timing, model tier, sources used, and impact level.",
+  StatusParamsSchema,
+  handleStatus,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.map",
+  "Rebuild the codebase map. Scans file tree, parses imports, matches tests, analyzes git change coupling and ownership.",
+  MapParamsSchema,
+  handleMap,
+);
+
+// @ts-ignore - TS2589
+server.tool(
+  "steer.resume",
+  "Resume an interrupted or suspended task from where it left off.",
+  ResumeParamsSchema,
+  handleResume,
 );
 
 export async function startServer(): Promise<void> {

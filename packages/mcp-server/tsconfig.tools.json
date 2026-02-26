@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist/tools",
+    "rootDir": "./src/tools",
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/tools/*.ts"]
+}

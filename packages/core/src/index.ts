@@ -1,15 +1,15 @@
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
-export interface SteerConfig {
+export interface SteerCoreConfig {
   name: string;
   version: string;
 }
 
-export function createConfig(name: string): SteerConfig {
+export function createConfig(name: string): SteerCoreConfig {
   return { name, version: VERSION };
 }
 
-// Types
+// Types (v1)
 export type {
   Mode,
   GateMode,
@@ -25,7 +25,7 @@ export type {
 } from "./types.js";
 export { MODE_MAP } from "./types.js";
 
-// Core functions
+// Core functions (v1)
 export { scorePrompt } from "./scorePrompt.js";
 export { extractFileRefs } from "./extractFileRefs.js";
 export { generateFollowUps } from "./generateFollowUps.js";
@@ -40,3 +40,6 @@ export { gate } from "./gate.js";
 
 // Telemetry
 export * as telemetry from "./telemetry.js";
+
+// ── v2: Workflow Engine ────────────────────────────────────────────
+export * as workflow from "./workflow/index.js";
