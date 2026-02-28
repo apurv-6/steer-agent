@@ -1,13 +1,4 @@
-export const VERSION = "0.2.0";
-
-export interface SteerConfig {
-  name: string;
-  version: string;
-}
-
-export function createConfig(name: string): SteerConfig {
-  return { name, version: VERSION };
-}
+export const VERSION = "3.0.0";
 
 // Types
 export type {
@@ -27,6 +18,19 @@ export type {
   FileInfo,
   DependencyGraph,
   ChangeCoupling,
+  // V3.0 types
+  HookDefinition,
+  HooksConfig,
+  HookResult,
+  LearningEntry,
+  LearningCategory,
+  KnowledgeEntry,
+  PlanStep,
+  ImpactPreview,
+  VerificationResult,
+  VerificationCheck,
+  SimilarTask,
+  SteerConfig,
 } from "./types.js";
 export { MODE_MAP } from "./types.js";
 
@@ -46,10 +50,25 @@ export { gate } from "./gate.js";
 // Telemetry
 export * as telemetry from "./telemetry.js";
 
-// New V2 Exports
+// Codebase map
 export { buildCodebaseMap } from "./codemap-static.js";
+
+// State machine
 export { createNewTask, transitionStep, INITIAL_STATE } from "./state.js";
 export type { TaskState, StepName, StepStatus } from "./state.js";
+
+// Init & Start
 export { initSteer } from "./init.js";
 export { startTask } from "./start.js";
 export type { StartOptions } from "./start.js";
+
+// V3.0 Core Modules
+export { loadHooks, runHooks, parseHooksYaml } from "./hookRunner.js";
+export { loadModuleKnowledge, loadGlobalKnowledge, loadRules } from "./knowledgeLoader.js";
+export { assemblePrompt, loadTemplate, parseFrontmatter } from "./promptAssembler.js";
+export type { AssemblyContext } from "./promptAssembler.js";
+export { findSimilarTasks } from "./similarTasks.js";
+export { buildPlan, computeImpact } from "./planBuilder.js";
+export type { PlanContext } from "./planBuilder.js";
+export { runVerification } from "./verifier.js";
+export { extractLearnings, persistLearnings, updateKnowledgeFile } from "./learner.js";

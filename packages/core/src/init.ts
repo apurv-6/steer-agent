@@ -3,7 +3,7 @@ import path from "path";
 import { buildCodebaseMap } from "./codemap-static.js";
 
 const DEFAULT_CONFIG = {
-  version: "2.0",
+  version: "3.0",
   team: "engineering",
   integrations: {
     jira: { projectKey: "", baseUrl: "", autoFetch: false },
@@ -238,6 +238,7 @@ export async function initSteer(cwd: string) {
   // 1. Create directories
   await fs.ensureDir(path.join(steerDir, "templates"));
   await fs.ensureDir(path.join(steerDir, "state"));
+  await fs.ensureDir(path.join(steerDir, "knowledge"));
   await fs.ensureDir(path.join(steerDir, "embeddings"));
 
   // 2. Write config.json
@@ -254,7 +255,19 @@ export async function initSteer(cwd: string) {
     await fs.writeFile(path.join(steerDir, "templates", filename), content);
   }
 
-  // 6. Build Codebase Map
+  // 6. Create knowledge/_global.md
+  const globalKnowledgePath = path.join(steerDir, "knowledge", "_global.md");
+  if (!await fs.pathExists(globalKnowledgePath)) {
+    await fs.writeFile(globalKnowledgePath, "# Global Knowledge\n\nTeam-wide patterns, conventions, and learnings.\n");
+  }
+
+  // 7. Create steer.log placeholder
+  const logPath = path.join(steerDir, "state", "steer.log");
+  if (!await fs.pathExists(logPath)) {
+    await fs.writeFile(logPath, `# SteerAgent Log — initialized ${new Date().toISOString()}\n`);
+  }
+
+  // 8. Build Codebase Map
   console.log("Building codebase map...");
   try {
     const map = await buildCodebaseMap(cwd);

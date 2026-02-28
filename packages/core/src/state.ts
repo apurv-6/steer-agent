@@ -1,4 +1,4 @@
-import { Mode } from "./types.js";
+import { Mode, HookResult, PlanStep, VerificationResult, LearningEntry, ImpactPreview } from "./types.js";
 
 export type StepName =
   | "idle"
@@ -8,6 +8,7 @@ export type StepName =
   | "execution"
   | "reflection"
   | "verification"
+  | "learning"
   | "done";
 
 export interface StepStatus {
@@ -29,12 +30,20 @@ export interface TaskState {
   modelReason?: string;
   sourcesUsed: string[];
   files: string[];
-  impactPreview?: any; // To be defined
+  impactPreview?: ImpactPreview;
   score?: number;
   overrideUsed?: boolean;
   reflectionPassed?: boolean;
   resumable: boolean;
   context: any; // The gathered context
+
+  // V3.0 additions
+  hookResults: HookResult[];
+  planSteps: PlanStep[];
+  verificationOutcome?: VerificationResult;
+  learningNotes: LearningEntry[];
+  goal?: string;            // task goal/description
+  acceptanceCriteria?: string[];
 }
 
 export const INITIAL_STATE: TaskState = {
@@ -52,12 +61,16 @@ export const INITIAL_STATE: TaskState = {
     execution: { status: "pending" },
     reflection: { status: "pending" },
     verification: { status: "pending" },
+    learning: { status: "pending" },
     done: { status: "pending" },
   },
   sourcesUsed: [],
   files: [],
   resumable: false,
   context: {},
+  hookResults: [],
+  planSteps: [],
+  learningNotes: [],
 };
 
 export function createNewTask(taskId: string, mode: Mode): TaskState {
@@ -96,7 +109,7 @@ export function transitionStep(state: TaskState, nextStep: StepName): TaskState 
   };
 
   // Update step number based on order
-  const stepOrder: StepName[] = ["idle", "context", "prompt", "planning", "execution", "reflection", "verification", "done"];
+  const stepOrder: StepName[] = ["idle", "context", "prompt", "planning", "execution", "reflection", "verification", "learning", "done"];
   newState.stepNumber = stepOrder.indexOf(nextStep);
 
   return newState;

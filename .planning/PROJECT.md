@@ -2,92 +2,97 @@
 
 ## What This Is
 
-SteerAgent is a developer productivity tool that gates every AI prompt before it reaches an LLM. When a developer types `/steer` (or enables Steer: ON), every outgoing message is intercepted, scored against a rubric, optionally patched with missing structure, routed to an appropriate model tier, and instrumented. It turns vague "fix it" prompts into structured, cost-efficient, first-pass-success prompts — without requiring developers to learn prompt engineering.
+SteerAgent is an AI workflow governance system for engineering teams. It standardizes how developers collaborate with AI coding agents by enforcing structured workflows, guardrails, and measurement — without requiring any prompting skill.
+
+It is NOT a prompt coaching tool. It is NOT an AI wrapper. It is engineering standards enforcement for AI-assisted development.
+
+**Comparable to:** ESLint for code quality → SteerAgent for AI collaboration quality.
 
 Built for CoinSwitch first (14 devs, ~10 items/month pilot), architected to generalize later.
 
 ## Core Value
 
-Every prompt going to an LLM is structured enough to get a useful response on the first try — reducing iteration churn, token waste, and developer frustration.
+Increase First-Pass Completion Rate (FPCR) while reducing AI cost. Make the process repeatable so any developer — junior or senior — produces quality output on first pass. Knowledge compounds: every task makes the next one smarter.
 
-## Requirements
+## Architecture
 
-### Validated
+Three layers. Clear separation of concerns.
 
-- ✓ Rule-based prompt scoring (0-10, section-based deductions) — v0.1
-- ✓ Follow-up question generation (max 3, mode-aware, MCQ + open) — v0.1
-- ✓ Prompt patching (5-section: GOAL/CONTEXT/LIMITS/OUTPUT FORMAT/REVIEW) — v0.1
-- ✓ Model tier routing (small/mid/high) — v0.1
-- ✓ Token estimation + cost estimate — v0.1
-- ✓ MCP server (`steer.gate` tool) — v0.1
-- ✓ Cursor extension (Status + Wizard panels, @steer chat participant) — v0.1
-- ✓ CLI interactive mode — v0.1
-- ✓ Local telemetry (JSONL) — v0.1
-- ✓ Canonical gate() in core (single source of truth) — v0.2
-- ✓ Git impact analysis (diff parsing, critical modules, impact level) — v0.2
-- ✓ Git-aware model routing with explanations + cost estimate — v0.2
-- ✓ Session tracking (taskId, turnId, scoreTrend) — v0.2
-- ✓ Cursor `beforeSubmitPrompt` hook bridge — v0.2
-- ✓ `nextAction` guidance in GateResult — v0.2
+```
+Layer 3: VS Code/Cursor Extension (v1: read-only, v2: full 5-tab sidebar)
+Layer 2: MCP Server (workflow engine — owns ALL logic and state)
+Layer 1: .steer/ folder (spec files, state, knowledge, templates — committed to git)
+```
 
-### Active
+- MCP works in ANY host: Cursor, VS Code, Claude Code, OpenCode, Gemini CLI, Windsurf
+- Extension v1 is optional. Extension v2 is the product experience.
+- Works 100% without extension (MCP + .steer/ = full functionality)
 
-- [ ] `/steer` command router (on/off/mode/gate/send/status/explain/metrics/reset/threshold)
-- [ ] Rubric-based scoring (5 dimensions: clarity, completeness, constraints, verifiability, efficiency)
-- [ ] 7-section prompt patch template (CONTEXT, GOAL, INPUTS, LIMITS, OUTPUT FORMAT, ACTIONS, REVIEW)
-- [ ] MCQ-first follow-up questions (prefer structured answers over open text)
-- [ ] Explainable model routing (provider + model, not just tier; reasoning + cost breakdown)
-- [ ] SessionStateV1 (full lifecycle: task thread, followup state, routing prefs, git context, UI, metrics)
-- [ ] Connected gating loop ("gate on type" debounce mode OR "near-intercept" Send Patched flow)
-- [ ] Command schema (steer.command.schema.json) + GateResult schema (steer.gateResult.schema.json)
-- [ ] Left panel: live session HUD (score, status, model, gate calls, block threshold, task)
-- [ ] Right panel: wizard (followups + answers + patched prompt diff + model explanation + Send/Apply/Override)
-- [ ] Expanded modes: dev, debug, bugfix, spec, review, interview
-- [ ] Session metrics in panel (gate calls, blocked count, overrides, avg score, turns-to-done proxy)
-- [ ] criticalModules.json integration for CoinSwitch (auth, payments, security paths)
-- [ ] Override audit trail (reason logged when BLOCKED is overridden)
+## 8-Step Workflow
 
-### Out of Scope
+Every task, every mode, every time:
 
-- Cloud/org-wide analytics — local only for v1
-- Auto-sending to Cursor chat unless API allows reliably — use near-intercept pattern
-- Code execution or PR creation automation — just prompt steering
-- LLM-based scoring — rule-based only (deterministic, fast, zero cost)
-- Persistent org-wide config — per-workspace for v1
-- Mobile/web app — Cursor-first
+1. **Context Gathering** — load knowledge + codemap + RAG + external sources
+2. **Prompt Assembly** — build from all context including knowledge layer
+3. **Planning** — impact preview + sub-agent decision
+4. **Execution** — single-agent OR parallel sub-agents
+5. **Reflection Loop** — self-review against criteria + knowledge
+6. **Verification** — acceptance gate
+7. **Learning Extraction** — extract + persist compounding knowledge
+8. **Output Generation** — commit + PR + telemetry + knowledge updates
 
-## Context
+## Primary KPI
 
-- Monorepo: 4 packages (core, mcp-server, cli, cursor-extension) + hooks/
-- v0.2 already works: scoring, patching, routing, extension panels, hook bridge, telemetry
-- The gap is **cohesion**: pieces exist but the UX is fragmented (manual gate → copy-paste → no loop)
-- Cursor supports `beforeSubmitPrompt` hook (verified), but true chat input interception requires either hooks or "near-intercept" UX pattern
-- GSD-inspired architecture: slash commands, spec-first, smooth sub-agent orchestration
-- CoinSwitch pilot: measure throughput per dev per month, token cost per task, first-pass success rate
+**FPCR** = (tasks completed in ≤ 2 rounds) / (total tasks) × 100%
+
+Target: 70%+ after Phase 2 (60 days).
 
 ## Constraints
 
 - **Runtime**: Node.js >= 18
-- **IDE**: Cursor (primary), VS Code compatible
-- **Cost**: Zero runtime cost — no LLM calls in the gate itself
-- **Latency**: < 200ms for gate evaluation (rule-based, pure TS functions)
-- **Architecture**: Core must be framework-free, importable by all consumers (MCP, extension, CLI, hooks)
-- **Pilot**: Must work at CoinSwitch within current tooling (Cursor + existing repos)
-- **Modularity**: Same repo for speed, but package boundaries clean enough to extract later
+- **IDE**: Any MCP-compatible host (Cursor primary)
+- **Cost**: Zero runtime cost in governance layer (no LLM calls in gate/scoring/routing/hooks)
+- **Latency**: < 200ms for deterministic operations
+- **Architecture**: Core must be framework-free, importable by all consumers
+- **State**: File-based (current-task.json is single source of truth)
+- **Knowledge**: `.steer/knowledge/` committed to git (team-shared)
+- **No auto-send**: Developer always manually confirms before execution
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Rule-based scoring (not LLM) | Zero cost, deterministic, < 200ms | ✓ Good |
-| Single canonical gate() in core | Eliminates duplication, single schema | ✓ Good |
-| CJS hook script (not ESM) | Node 18 compatibility without package.json | ✓ Good |
-| beforeSubmitPrompt hook | Best Cursor integration point, gets prompt text | — Pending |
-| Block only at score ≤ 3 | Aggressive enough to catch garbage, not annoying | — Pending |
-| Near-intercept pattern (Send Patched) | Works even if Cursor can't truly intercept chat | — Pending |
-| GSD-inspired command system | Proven UX pattern for slash commands + workflow | — Pending |
-| Rubric scoring (5 dimensions) | More nuanced than section-presence checking | — Pending |
-| MCQ-first follow-ups | Faster for devs, structured answers patch better | — Pending |
+| Decision | Rationale |
+|----------|-----------|
+| 3-layer architecture | Clear separation: files → engine → UI |
+| MCP owns all logic | Works in any host, extension is optional |
+| File-based state | Simple, debuggable, resumable |
+| Deterministic governance | No AI in scoring, routing, gating, hooks |
+| Compounding knowledge | Learnings persist in git, shared across team |
+| Sub-agents for parallel work only | File isolation enforced, no shared-file parallelism |
+| RAG over full-file loading | 80% token reduction |
+| Reflection before human review | Catch obvious mistakes automatically |
+| FPCR as primary KPI | Measures what leadership cares about |
+| Extension v2 as product surface | 5-tab sidebar is the daily developer experience |
+
+## Build Phases
+
+- **V1 (Weeks 1-4)**: Foundation, workflow engine, measurement, knowledge, extension v2 core
+- **Phase 2 (Weeks 5-8)**: Intelligence (RAG, tree-sitter), integrations (Jira/Sentry/GitHub), output generation
+- **Phase 3+**: Compound workflows, full sub-agent orchestration, LSP, web dashboard
+
+## What Exists (v0.2)
+
+- Rule-based scoring (0-10, section-presence) ✓
+- Follow-up generation (max 3, mode-aware) ✓
+- Prompt patching (5-section: GOAL/CONTEXT/LIMITS/OUTPUT FORMAT/REVIEW) ✓
+- Model tier routing (small/mid/high) ✓
+- MCP server (steer.gate tool) ✓
+- Cursor extension (Status + Wizard panels) ✓
+- CLI interactive mode ✓
+- Local telemetry (JSONL) ✓
+- Hook bridge (beforeSubmitPrompt) ✓
+- Git impact analysis ✓
+
+These components will be refactored into the v3.0 architecture.
 
 ---
-*Last updated: 2026-02-24 after v1 spec definition*
+*Canonical spec: `.planning/SPEC-V3.md` | Last updated: 2026-02-28*

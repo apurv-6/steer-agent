@@ -1,9 +1,12 @@
 import fs from "fs-extra";
 import path from "path";
 import yaml from "yaml";
-import { Mode, CodebaseMap } from "./types.js";
+import { Mode, CodebaseMap, KnowledgeEntry, SimilarTask } from "./types.js";
 import { createNewTask } from "./state.js";
 import { extractFileRefs } from "./extractFileRefs.js";
+import { loadHooks, runHooks } from "./hookRunner.js";
+import { loadModuleKnowledge, loadGlobalKnowledge } from "./knowledgeLoader.js";
+import { findSimilarTasks } from "./similarTasks.js";
 import { exec } from "child_process";
 import util from "util";
 
@@ -63,6 +66,23 @@ export async function startTask(options: StartOptions) {
   // 3. Initialize State
   const state = createNewTask(taskId, mode);
 
+  // 3a. Run pre-context hooks
+  const hooks = loadHooks(cwd);
+  const preContextResults = runHooks("pre-context", hooks, cwd);
+  state.hookResults.push(...preContextResults);
+
+  // Check for blocking hooks
+  const blocked = preContextResults.find((r) => !r.passed && r.action === "block");
+  if (blocked) {
+    return {
+      state,
+      message: `Blocked by hook: ${blocked.output}`,
+      template: frontmatter,
+      initialQuestions: [],
+      context: {},
+    };
+  }
+
   // 4. Process Initial Message (Detect @files)
   const referencedFiles = extractFileRefs(initialMessage);
 
@@ -89,11 +109,22 @@ export async function startTask(options: StartOptions) {
   // 5. Build Initial Context
   const gitContext = await getGitContext(cwd, resolvedFileList);
 
+  // 5a. Load knowledge for affected modules
+  const affectedModules = deriveAffectedModules(resolvedFileList, codemap);
+  const knowledge: KnowledgeEntry[] = loadModuleKnowledge(affectedModules, cwd);
+  const globalKnowledge = loadGlobalKnowledge(cwd);
+
+  // 5b. Find similar past tasks
+  const similarTasks: SimilarTask[] = findSimilarTasks(mode, resolvedFileList, initialMessage, cwd);
+
   const context = {
     rules,
     codemapSummary: codemap ? `Root: ${codemap.root}, Modules: ${Object.keys(codemap.modules).length}, Files: ${Object.keys(codemap.files).length}` : "No map",
     referencedFiles: resolvedFileList,
     gitContext,
+    knowledge,
+    globalKnowledge,
+    similarTasks,
     template: {
       frontmatter,
       body: templateBody
@@ -103,8 +134,15 @@ export async function startTask(options: StartOptions) {
 
   state.context = context;
   state.files = resolvedFileList;
+  state.goal = initialMessage;
   state.sourcesUsed.push("codemap", "files");
   if (gitContext) state.sourcesUsed.push("git");
+  if (knowledge.length > 0) state.sourcesUsed.push("knowledge");
+  if (similarTasks.length > 0) state.sourcesUsed.push("similar_tasks");
+
+  // Run post-context hooks
+  const postContextResults = runHooks("post-context", hooks, cwd);
+  state.hookResults.push(...postContextResults);
 
   // 6. Save State
   const statePath = path.join(steerDir, "state", "current-task.json");
@@ -143,4 +181,15 @@ function generateInitialQuestions(frontmatter: any) {
     question: `Please provide: ${field}`,
     type: "text"
   }));
+}
+
+function deriveAffectedModules(files: string[], codemap: CodebaseMap | null): string[] {
+  if (!codemap) return [];
+  const modules = new Set<string>();
+  for (const file of files) {
+    for (const [modName, mod] of Object.entries(codemap.modules)) {
+      if (mod.files.includes(file)) modules.add(modName);
+    }
+  }
+  return [...modules];
 }

@@ -6,4 +6,12 @@ export default defineConfig({
   dts: false,
   clean: true,
   sourcemap: true,
+  noExternal: [],
+  external: [
+    "@modelcontextprotocol/sdk",
+    "@steer-agent-tool/core",
+    "zod",
+    "fs-extra",
+    "yaml",
+  ],
 });

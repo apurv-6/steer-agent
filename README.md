@@ -1,114 +1,98 @@
 # SteerAgent
 
-**Prompt quality gate for AI coding agents.** Scores your prompts, suggests improvements, routes to the right model tier, and blocks weak prompts before they waste tokens.
+**AI workflow governance for engineering teams.** Standardizes how developers collaborate with AI coding agents — structured workflows, guardrails, measurement, and compounding knowledge. No prompting skill required.
 
-Built for teams using Cursor IDE with AI coding workflows.
+## What It Does
 
-## What it does
-
-Before your prompt reaches an LLM, SteerAgent evaluates it:
-
-| Score | Status      | What happens                          |
-|-------|-------------|---------------------------------------|
-| 1-3   | BLOCKED     | Prompt rejected - must improve first  |
-| 4-6   | NEEDS_INFO  | Prompt allowed with guidance shown    |
-| 7-10  | READY       | Prompt allowed silently               |
-
-It checks for:
-- Clear goal statement
-- Scope limits (files, modules)
-- Review criteria
-- Context (git diff, file references)
-- Appropriate model routing (save money on simple tasks)
-
-## Quick Start (15 min)
-
-```bash
-git clone https://github.com/apurv-6/steer-agent.git
-cd steer-agent
-npm install
-npm run build
-```
-
-Verify:
-```bash
-npx vitest run          # tests should pass
-bash hooks/demo.sh      # 3 gate calls: BLOCKED -> NEEDS_INFO -> READY
-```
-
-Then follow [docs/SETUP.md](docs/SETUP.md) to install the Cursor extension, hook, and MCP server.
-
-## Components
-
-| Package | What it does |
-|---------|-------------|
-| `packages/core` | Scoring engine, prompt builder, follow-up generator, git impact analysis |
-| `packages/mcp-server` | MCP server exposing `steer.gate` tool for Cursor chat |
-| `packages/cursor-extension` | VS Code/Cursor sidebar with score display, follow-ups, and patched prompt |
-| `packages/cli` | CLI for scripting and CI integration |
-| `hooks/` | Cursor `beforeSubmitPrompt` hook that gates every prompt |
-
-## How it works
-
-```
-Developer writes prompt
-        |
-        v
-  [Cursor Hook / MCP / CLI]
-        |
-        v
-  SteerAgent Gate
-  - Score prompt (0-10)
-  - Detect missing sections (GOAL, LIMITS, REVIEW, etc.)
-  - Analyze git diff for blast radius
-  - Check critical modules
-  - Generate follow-up questions
-  - Route to model tier (small/mid/high)
-        |
-        v
-  BLOCKED / NEEDS_INFO / READY
-```
-
-## Integration Options
-
-### 1. Cursor Hook (recommended - automatic)
-Gates every prompt submission. Zero friction after install.
-
-### 2. MCP Server
-Use `/steer` in Cursor chat to evaluate prompts on demand.
-
-### 3. CLI
-```bash
-echo "fix the bug" | npx steer-cli gate --mode dev
-```
-
-### 4. Critical Modules
-Create `criticalModules.json` in your project root:
-```json
-{
-  "paths": ["src/auth", "src/payments", "src/core/security"]
-}
-```
-When git diff touches these paths, model routing auto-upgrades.
-
-## Docs
-
-- [Setup Guide](docs/SETUP.md) - Full installation for your team
-- [Workflow Guide](docs/WORKFLOW.md) - How to use SteerAgent day-to-day
-- [Pilot Metrics](docs/PILOT.md) - What we measure and success criteria
-- [Debug Guide](docs/DEBUG.md) - Troubleshooting
+| Without SteerAgent | With SteerAgent |
+|---|---|
+| Developer types vague prompt | Developer answers 2-3 structured questions |
+| 5-7 iterations to get useful output | 1-2 iterations (FPCR 70%+) |
+| Context manually typed, often incomplete | Context auto-gathered from codebase, Jira, Sentry, git |
+| Expensive models used for trivial tasks | Deterministic routing to right model tier |
+| Knowledge lost after each task | Knowledge compounds across team via git |
+| No measurement | FPCR dashboard, telemetry, leadership reports |
 
 ## Architecture
 
 ```
-core (shared library)
- ├── mcp-server
- ├── cursor-extension
- └── cli
+Layer 3: VS Code/Cursor Extension (v1: read-only, v2: full 5-tab sidebar)
+Layer 2: MCP Server (workflow engine — owns ALL logic)
+Layer 1: .steer/ folder (templates, rules, knowledge — committed to git)
 ```
 
-TypeScript monorepo with npm workspaces. `core` is the only shared dependency.
+Works in **any MCP host**: Cursor, VS Code, Claude Code, OpenCode, Gemini CLI, Windsurf.
 
-## License
+## Quick Start
 
-Private - internal use only.
+```bash
+# Setup
+npx steer-agent-tool init       # Create .steer/, build codebase map
+npx steer-agent-tool mcp        # Start MCP server
+
+# Usage (in any MCP-compatible chat)
+/steer:bugfix COIN-4521         # Bugfix workflow
+/steer:feature                  # Feature workflow
+/steer:refactor                 # Refactor workflow
+/steer:status                   # Check progress
+/steer:resume                   # Resume interrupted task
+
+# Metrics
+npx steer-agent-tool metrics    # FPCR, iteration index, model usage
+```
+
+## 8-Step Workflow
+
+Every task, every mode, every time:
+
+1. **Context Gathering** — load knowledge + codemap + git + external sources
+2. **Prompt Assembly** — build structured prompt from all context
+3. **Planning** — impact preview + approval required
+4. **Execution** — single-agent or parallel sub-agents
+5. **Reflection** — self-review before presenting to developer
+6. **Verification** — acceptance gate
+7. **Learning** — extract and persist knowledge for future tasks
+8. **Output** — commit message + PR description + telemetry
+
+## Extension v2 (5-Tab Sidebar)
+
+| Tab | What It Shows |
+|---|---|
+| Task | Active task card, workflow progress, CLEAR score, task input |
+| Knowledge | Module learnings, failed approaches, search |
+| FPCR | First-Pass Completion Rate, team metrics, leaderboard |
+| Map | Codebase intelligence, module tree, change coupling |
+| Rules | Active rules, hooks, governance status |
+
+## MCP Configuration
+
+```json
+{
+  "mcpServers": {
+    "steer-agent": {
+      "command": "npx",
+      "args": ["steer-agent-tool", "mcp"],
+      "cwd": "/path/to/your/repo"
+    }
+  }
+}
+```
+
+## Docs
+
+- [Spec v3.0](.planning/SPEC-V3.md) — Full master specification
+- [Setup](docs/SETUP.md) — Installation guide
+- [Workflow](docs/WORKFLOW.md) — Daily usage
+- [Pilot](docs/PILOT.md) — Metrics and success criteria
+
+## Build
+
+```bash
+npm install
+npm run build --workspaces
+npm test
+```
+
+---
+
+Built for CoinSwitch (14 devs). Architected to generalize.

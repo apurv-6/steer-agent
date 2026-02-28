@@ -25,8 +25,6 @@ switch (command) {
 }
 
 async function runInit(): Promise<void> {
-  const { mkdirSync, existsSync } = await import("node:fs");
-
   // Check Node version
   const [major] = process.versions.node.split(".").map(Number);
   if (major < 18) {
@@ -35,18 +33,18 @@ async function runInit(): Promise<void> {
   }
   console.log(`Node.js ${process.versions.node} — OK`);
 
-  // Create data directory
-  if (!existsSync("./data")) {
-    mkdirSync("./data", { recursive: true });
-    console.log("Created ./data directory");
-  } else {
-    console.log("./data directory already exists");
-  }
+  // Use core initSteer to create .steer/ folder with all config
+  const { initSteer } = await import("@steer-agent-tool/core");
+  const cwd = process.cwd();
+  console.log(`Initializing SteerAgent in ${cwd}...`);
+
+  const result = await initSteer(cwd);
+  console.log(`Created ${result.path}`);
 
   console.log("\nSetup complete! Next steps:");
-  console.log("  1. Install the Cursor extension from packages/cursor-extension");
-  console.log('  2. Run "npx steer-agent-tool mcp" to start the MCP server');
-  console.log('  3. Run "npx steer-agent-tool metrics" to view telemetry');
+  console.log('  1. Run "npx steer-agent-tool mcp" to start the MCP server');
+  console.log("  2. Configure your MCP host (Cursor, VS Code, Claude Code)");
+  console.log("  3. Use /steer:start to begin your first task");
 }
 
 async function runSteerCmd(): Promise<void> {
