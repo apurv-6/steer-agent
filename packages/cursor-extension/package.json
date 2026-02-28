@@ -1,6 +1,6 @@
 {
   "name": "steer-agent-tool-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Steer Agent Tool",
   "description": "Cursor extension for steer-agent-tool",
   "publisher": "steer-agent-tool",
@@ -39,6 +39,24 @@
         "command": "steeragent.applyToChat",
         "title": "Steer Agent: Apply to Chat",
         "icon": "$(send)"
+      },
+      {
+        "command": "steeragent.startTask",
+        "title": "Steer Agent: Start Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "steeragent.showStatus",
+        "title": "Steer Agent: Show Status"
+      },
+      {
+        "command": "steeragent.showSidebar",
+        "title": "Steer Agent: Show Sidebar"
+      },
+      {
+        "command": "steeragent.rebuildMap",
+        "title": "Steer Agent: Rebuild Codebase Map",
+        "icon": "$(refresh)"
       }
     ],
     "chatParticipants": [
@@ -62,13 +80,8 @@
       "steeragent": [
         {
           "type": "webview",
-          "id": "steeragent.statusPanel",
-          "name": "Status"
-        },
-        {
-          "type": "webview",
-          "id": "steeragent.wizardPanel",
-          "name": "Wizard"
+          "id": "steeragent.sidebar",
+          "name": "Dashboard"
         }
       ]
     }

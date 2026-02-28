@@ -3,17 +3,19 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { VERSION, telemetry } from "@steer-agent-tool/core";
 import { SessionState, type GateMode } from "./SessionState";
-import { StatusPanel } from "./StatusPanel";
-import { WizardPanel } from "./WizardPanel";
+// import { WizardPanel } from "./WizardPanel";
 import { callGate, type GateResult } from "./gateClient";
+import { SidebarProvider } from "./panels/sidebar";
+import { registerBridgeCommands } from "./command-bridge";
+import { registerAnnotations } from "./annotations";
 
 let sessionState: SessionState;
-let wizardPanel: WizardPanel;
+// let wizardPanel: WizardPanel;
 let telemetryPath: string;
 
 export function activate(context: vscode.ExtensionContext) {
   sessionState = new SessionState(context.workspaceState);
-  wizardPanel = new WizardPanel(sessionState);
+  // wizardPanel = new WizardPanel(sessionState);
 
   // Set up telemetry path in extension global storage
   const telemetryDir = context.globalStorageUri.fsPath;
@@ -42,22 +44,21 @@ export function activate(context: vscode.ExtensionContext) {
 
   console.log(`[steer-agent-tool] Extension activated v${VERSION}`);
 
-  // Register webview providers (wrapped in try/catch)
+  // Register v2 sidebar (connected to sessionState for live updates)
   try {
+    const sidebar = new SidebarProvider(context.extensionUri, sessionState);
     context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(StatusPanel.viewType, new StatusPanel(sessionState)),
+      vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebar),
     );
   } catch (err) {
-    vscode.window.showErrorMessage(`[steer] StatusPanel registration failed: ${err}`);
+    console.warn("[steer] Sidebar registration failed:", err);
   }
 
-  try {
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(WizardPanel.viewType, wizardPanel),
-    );
-  } catch (err) {
-    vscode.window.showErrorMessage(`[steer] WizardPanel registration failed: ${err}`);
-  }
+  // Register bridge commands
+  registerBridgeCommands(context);
+
+  // Register inline annotations
+  registerAnnotations(context);
 
   // Register /steer chat participant (wrapped — may not be available in all Cursor versions)
   try {
@@ -101,8 +102,8 @@ export function activate(context: vscode.ExtensionContext) {
       // Telemetry (best-effort, never crashes)
       appendTelemetry(gateResult, sessionState.data.mode);
 
-      wizardPanel.setDraftPrompt(request.prompt);
-      wizardPanel.updateGateResult(gateResult);
+      // wizardPanel.setDraftPrompt(request.prompt);
+      // wizardPanel.updateGateResult(gateResult);
 
       // Stream results inline
       const statusEmoji = gateResult.status === "READY" ? "\u2705" : gateResult.status === "NEEDS_INFO" ? "\u26a0\ufe0f" : "\ud83d\udeab";
@@ -232,8 +233,8 @@ export function activate(context: vscode.ExtensionContext) {
       // Telemetry (best-effort, never crashes)
       appendTelemetry(gateResult, sessionState.data.mode);
 
-      wizardPanel.setDraftPrompt(draftPrompt);
-      wizardPanel.updateGateResult(gateResult);
+      // wizardPanel.setDraftPrompt(draftPrompt);
+      // wizardPanel.updateGateResult(gateResult);
 
       if (gateResult.status === "BLOCKED") {
         vscode.window.showWarningMessage(`BLOCKED (score ${gateResult.score}/10). Missing: ${gateResult.missing.join(", ")}. Check Wizard panel.`);
@@ -269,33 +270,18 @@ export function activate(context: vscode.ExtensionContext) {
   // steeragent.applyToChat
   context.subscriptions.push(
     vscode.commands.registerCommand("steeragent.applyToChat", async () => {
-      const lastGateResult = wizardPanel.getLastGateResult();
-      if (!lastGateResult) {
+      // Use last patched prompt from session state (WizardPanel removed in v2)
+      const patchedPrompt = sessionState.data.lastPatchedPrompt;
+      if (!patchedPrompt) {
         vscode.window.showWarningMessage("No gate result. Run 'Steer Agent: Suggest' first.");
         return;
       }
-
-      let overrideUsed = false;
-
-      if (lastGateResult.status === "BLOCKED") {
-        const reason = await vscode.window.showInputBox({
-          prompt: "This prompt is BLOCKED. Provide a reason to override:",
-          placeHolder: "Why override the block?",
-        });
-        if (!reason) {
-          vscode.window.showInformationMessage("Override cancelled.");
-          return;
-        }
-        overrideUsed = true;
-      }
-
-      const textToApply = lastGateResult.patchedPrompt ?? "";
 
       // Primary: try to fill chat composer via command
       let applied = false;
       try {
         await vscode.commands.executeCommand("workbench.action.chat.open", {
-          query: textToApply,
+          query: patchedPrompt,
           isPartialQuery: true,
         });
         applied = true;
@@ -304,29 +290,45 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       if (!applied) {
-        await vscode.env.clipboard.writeText(textToApply);
+        await vscode.env.clipboard.writeText(patchedPrompt);
         vscode.window.showInformationMessage("Patched prompt copied to clipboard (chat composer not available).");
       }
 
       // Log telemetry
-      const event = {
+      telemetry.append({
         timestamp: new Date().toISOString(),
         event: "applyToChat",
         taskId: sessionState.data.taskId,
         turnId: sessionState.data.turnId,
         gateCallCount: sessionState.data.gateCallCount,
-        finalScore: lastGateResult.score,
+        finalScore: sessionState.data.lastScore,
         scoreTrend: sessionState.data.scoreTrend,
-        modelTier: lastGateResult.modelSuggestion.tier,
-        overrideUsed,
+        modelTier: sessionState.data.lastModelTier,
         mode: sessionState.data.mode,
-      };
-
-      telemetry.append(event, telemetryPath).catch(() => {
+      }, telemetryPath).catch(() => {
         // Telemetry is best-effort
       });
     }),
   );
+
+  // Watch .steer/state/current-task.json for workflow step updates
+  const taskWatcher = vscode.workspace.createFileSystemWatcher("**/.steer/state/current-task.json");
+  const handleTaskFile = (uri: vscode.Uri) => {
+    try {
+      const raw = fs.readFileSync(uri.fsPath, "utf-8");
+      const task = JSON.parse(raw);
+      sessionState.update({
+        workflowStep: task.currentStep || null,
+        workflowGoal: task.goal || null,
+        workflowFiles: task.files || [],
+      });
+    } catch {
+      // Best-effort
+    }
+  };
+  taskWatcher.onDidChange(handleTaskFile);
+  taskWatcher.onDidCreate(handleTaskFile);
+  context.subscriptions.push(taskWatcher);
 
   // Watch .steer/last-gate.json bridge file written by the Cursor hook
   const bridgeWatcher = vscode.workspace.createFileSystemWatcher("**/.steer/last-gate.json");
@@ -361,8 +363,8 @@ export function activate(context: vscode.ExtensionContext) {
       context.workspaceState.update("steer.turnId", turnId);
       context.workspaceState.update("steer.gateCallCount", sessionState.data.gateCallCount);
 
-      wizardPanel.setDraftPrompt(bridge.draftPrompt);
-      wizardPanel.updateGateResult(gr);
+      // wizardPanel.setDraftPrompt(bridge.draftPrompt);
+      // wizardPanel.updateGateResult(gr);
 
       appendTelemetry(gr, bridge.mode);
     } catch {
