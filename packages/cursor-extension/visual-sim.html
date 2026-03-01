@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SteerAgent Extension — Visual Simulator</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: #0d0d14;
+      color: #cdd6f4;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    h1 { font-size: 18px; color: #f5a623; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #6c7086; margin-bottom: 24px; }
+
+    /* ── Page Layout ── */
+    .page { display: flex; flex-direction: column; gap: 32px; }
+    .scenario-label {
+      font-size: 10px; font-weight: 600; color: #f5a623;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 12px; padding-left: 4px;
+    }
+    .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+
+    /* ── Extension Frame ── */
+    .ext-frame {
+      width: 320px;
+      height: 520px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #313244;
+      box-shadow: 0 8px 32px #00000066;
+      display: flex;
+      flex-direction: column;
+      background: #1e1e2e;
+    }
+    .ext-label {
+      font-size: 10px; color: #6c7086; margin-top: 8px;
+      text-align: center;
+    }
+
+    /* ─── Design Tokens ─── */
+    :root {
+      --bg: #1e1e2e;
+      --bgAlt: #181825;
+      --surface: #252538;
+      --surfaceHover: #2a2a40;
+      --border: #313244;
+      --text: #cdd6f4;
+      --textDim: #6c7086;
+      --textMuted: #45475a;
+      --accent: #f5a623;
+      --green: #a6e3a1;
+      --red: #f38ba8;
+      --blue: #89b4fa;
+      --purple: #cba6f7;
+      --teal: #94e2d5;
+      --yellow: #f9e2af;
+    }
+
+    /* ─── Shared Sidebar CSS ─── */
+    .shell { display: flex; flex-direction: column; height: 100%; }
+    .title-bar {
+      display: flex; align-items: center; padding: 8px 12px; gap: 8px;
+      background: var(--bgAlt); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .logo {
+      width: 20px; height: 20px; border-radius: 4px;
+      background: linear-gradient(135deg, #f5a623, #e8950a);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: var(--bgAlt);
+    }
+    .title-text { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+    .connected { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .connected-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    .connected-text { font-size: 9px; color: var(--green); }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    .tab-rail {
+      display: flex; flex-direction: column; background: var(--bgAlt);
+      border-right: 1px solid var(--border); padding-top: 4px; flex-shrink: 0;
+    }
+    .tab-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 8px 2px; width: 48px; background: transparent;
+      border: none; border-left: 2px solid transparent;
+      color: var(--textDim); cursor: pointer; position: relative;
+      font-family: inherit;
+    }
+    .tab-btn span { font-size: 8px; font-weight: 500; letter-spacing: 0.03em; }
+    .tab-btn.active {
+      background: var(--surface); border-left-color: var(--accent); color: var(--accent);
+    }
+    .tab-badge {
+      position: absolute; top: 4px; right: 6px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--red); color: #fff;
+      font-size: 8px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .content {
+      flex: 1; padding: 10px; overflow-y: auto; overflow-x: hidden;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .content::-webkit-scrollbar { width: 3px; }
+    .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .status-bar {
+      display: flex; align-items: center; padding: 4px 10px;
+      background: var(--bgAlt); border-top: 1px solid var(--border);
+      gap: 8px; font-size: 9px; color: var(--textDim); flex-shrink: 0;
+    }
+    .sep { color: var(--border); }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 99px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .pill-sm { padding: 1px 6px; font-size: 9px; }
+    .card {
+      padding: 8px 10px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+    .section-title {
+      font-size: 10px; font-weight: 600; color: var(--textDim);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .progress-track { width: 100%; height: 3px; background: var(--bgAlt); border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 2px; }
+
+    .wf-step { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .wf-step.pending { opacity: 0.4; }
+    .wf-circle {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; flex-shrink: 0;
+    }
+    .wf-circle.done { background: var(--green); color: var(--bgAlt); border: 2px solid var(--green); }
+    .wf-circle.active { background: transparent; color: var(--accent); border: 2px solid var(--accent); box-shadow: 0 0 8px #f5a62344; }
+    .wf-circle.pending-c { background: transparent; color: var(--textMuted); border: 2px solid var(--textMuted); }
+    .wf-label { font-size: 11px; color: var(--textDim); }
+    .wf-label.active { color: var(--text); font-weight: 600; }
+
+    .metric-card {
+      padding: 10px 12px; border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      flex: 1; min-width: 0;
+    }
+    .metric-label { font-size: 9px; color: var(--textDim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .metric-value { font-size: 22px; font-weight: 700; }
+
+    .k-card { padding: 8px 10px; border-radius: 6px; background: var(--bgAlt); margin-bottom: 6px; }
+    .k-card-gotcha { border-left: 3px solid var(--red); }
+    .k-card-pattern { border-left: 3px solid var(--green); }
+    .k-card-convention { border-left: 3px solid var(--blue); }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <h1>⚡ SteerAgent Extension — Visual Flow Simulator</h1>
+    <div class="subtitle">All 5 tabs · 3 key states · Build: ✅ PASS · TypeCheck: ✅ PASS · Bundle: 443 KB</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  ROW 1: TASK TAB — 3 states                          -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div>
+    <div class="scenario-label">Task Tab — State Machine (idle → active → done)</div>
+    <div class="row">
+
+      <!-- State 1: No active task -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div class="card" style="text-align:center;padding:24px">
+                  <div style="color:#6c7086;margin-bottom:8px;font-size:20px">⚡</div>
+                  <div style="font-size:11px;font-weight:600;color:#cdd6f4">No active task</div>
+                  <div style="font-size:10px;color:#6c7086;margin-top:4px">Use steer.start to begin a new task</div>
+                </div>
+                <div style="padding:8px 10px;border-radius:8px;background:#181825;border:1px solid #313244">
+                  <div style="display:flex;gap:6px">
+                    <input placeholder="Describe task or paste Jira ID..."
+                      style="flex:1;padding:6px 8px;border-radius:4px;background:#252538;border:1px solid #313244;color:#cdd6f4;font-size:11px;outline:none;font-family:inherit" readonly />
+                    <button style="padding:6px 10px;border-radius:4px;background:#f5a623;border:none;color:#181825;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">▶ STEER</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>No map</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">—%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">1. Idle — No active task</div>
+      </div>
+
+      <!-- State 2: Task active (step 4 = Execution) -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span><div class="tab-badge">3</div></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <!-- Header -->
+                <div style="padding:10px 12px;border-radius:8px;background:linear-gradient(135deg,#f5a62344,#cba6f722);border:1px solid #f5a62333">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <div style="display:flex;align-items:center;gap:6px;color:#f5a623;font-size:11px;font-weight:700">⚡ task_m3xr8k_abc123</div>
+                    <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">IN PROGRESS</span>
+                  </div>
+                  <p style="font-size:12px;color:#cdd6f4;font-weight:500">Build extension visual flow simulation</p>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="width:8px;height:8px;border-radius:50%;background:#89b4fa;box-shadow:0 0 6px #89b4fa66"></div>
+                      <span style="font-size:11px;font-weight:600;color:#89b4fa">Sonnet 4</span>
+                      <span style="font-size:9px;color:#6c7086">Standard Tasks</span>
+                    </div>
+                    <span style="font-size:9px;color:#6c7086;margin-left:auto">🕐 2m 14s</span>
+                  </div>
+                </div>
+
+                <!-- CLEAR Score ring -->
+                <div class="card" style="display:flex;align-items:center;gap:12px">
+                  <svg width="44" height="44" style="transform:rotate(-90deg)">
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="#181825" stroke-width="4"/>
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="#a6e3a1" stroke-width="4"
+                      stroke-dasharray="113.1" stroke-dashoffset="22.6" stroke-linecap="round"/>
+                    <text x="22" y="22" text-anchor="middle" dominant-baseline="central"
+                      fill="#a6e3a1" font-size="14" font-weight="700"
+                      style="transform:rotate(90deg);transform-origin:center">80</text>
+                  </svg>
+                  <div style="flex:1">
+                    <div style="font-size:10px;font-weight:600;color:#cdd6f4;margin-bottom:4px">CLEAR Score</div>
+                    <div style="display:flex;gap:3px">
+                      <div style="width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;background:#a6e3a122;color:#a6e3a1;border:1px solid #a6e3a133">C</div>
+                      <div style="width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;background:#f5a62322;color:#f5a623;border:1px solid #f5a62333">L</div>
+                      <div style="width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;background:#a6e3a122;color:#a6e3a1;border:1px solid #a6e3a133">E</div>
+                      <div style="width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;background:#a6e3a122;color:#a6e3a1;border:1px solid #a6e3a133">A</div>
+                      <div style="width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;background:#f5a62322;color:#f5a623;border:1px solid #f5a62333">R</div>
+                    </div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:9px;color:#a6e3a1">✓ READY</div>
+                    <div style="font-size:8px;color:#6c7086">threshold: 70</div>
+                  </div>
+                </div>
+
+                <!-- Workflow steps -->
+                <div class="card">
+                  <div class="section-title" style="margin-bottom:6px">Workflow — Step 4 of 8</div>
+                  <div class="progress-track"><div class="progress-fill" style="width:50%;background:#f5a623"></div></div>
+                  <div style="margin-top:8px">
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Context Gathering</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Prompt Assembly</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Planning</span></div>
+                    <div class="wf-step"><div class="wf-circle active">4</div><span class="wf-label active">Execution</span><div style="margin-left:auto"><span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">RUNNING</span></div></div>
+                    <div class="wf-step pending"><div class="wf-circle pending-c">5</div><span class="wf-label">Reflection</span></div>
+                    <div class="wf-step pending"><div class="wf-circle pending-c">6</div><span class="wf-label">Verification</span></div>
+                    <div class="wf-step pending"><div class="wf-circle pending-c">7</div><span class="wf-label">Learning Extract</span></div>
+                    <div class="wf-step pending"><div class="wf-circle pending-c">8</div><span class="wf-label">Output &amp; PR</span></div>
+                  </div>
+                </div>
+
+                <!-- Sub-agents -->
+                <div class="card">
+                  <div class="section-title" style="margin-bottom:6px">Sub-Agents (Parallel)</div>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#a6e3a1;animation:pulse 2s infinite"></div>
+                      <span style="font-size:10px;color:#cdd6f4;flex:1">researcher-1</span>
+                      <span style="font-size:9px;color:#a6e3a1">running</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#a6e3a1;animation:pulse 2s infinite 0.5s"></div>
+                      <span style="font-size:10px;color:#cdd6f4;flex:1">explorer-2</span>
+                      <span style="font-size:9px;color:#a6e3a1">running</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#6c7086"></div>
+                      <span style="font-size:10px;color:#cdd6f4;flex:1">verifier-3</span>
+                      <span style="font-size:9px;color:#6c7086">waiting</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">82.4%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">2. Active — Execution step, sub-agents running</div>
+      </div>
+
+      <!-- State 3: Task done -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span><div class="tab-badge">3</div></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div style="padding:10px 12px;border-radius:8px;background:linear-gradient(135deg,#a6e3a122,#89b4fa22);border:1px solid #a6e3a133">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <div style="display:flex;align-items:center;gap:6px;color:#a6e3a1;font-size:11px;font-weight:700">✓ task_m3xr8k_abc123</div>
+                    <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">DONE</span>
+                  </div>
+                  <p style="font-size:12px;color:#cdd6f4;font-weight:500">Build extension visual flow simulation</p>
+                  <div style="margin-top:8px;font-size:10px;color:#6c7086">Completed in 4m 38s · 1 round · 3 learnings saved</div>
+                </div>
+                <div class="card">
+                  <div class="section-title" style="margin-bottom:6px">Workflow — Complete ✓</div>
+                  <div class="progress-track"><div class="progress-fill" style="width:100%;background:#a6e3a1"></div></div>
+                  <div style="margin-top:8px">
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Context Gathering</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Prompt Assembly</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Planning</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Execution</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Reflection</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Verification</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Learning Extract</span></div>
+                    <div class="wf-step"><div class="wf-circle done">✓</div><span class="wf-label">Output &amp; PR</span></div>
+                  </div>
+                </div>
+                <div class="card" style="border-color:#a6e3a133">
+                  <div style="font-size:10px;font-weight:600;color:#a6e3a1;margin-bottom:4px">✓ First-Pass Complete</div>
+                  <div style="font-size:9px;color:#6c7086">PR ready · 3 knowledge entries added · FPCR updated</div>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">83.1%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">3. Done — All 8 steps complete, FPCR updated</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  ROW 2: Knowledge + FPCR + Map tabs                   -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div>
+    <div class="scenario-label">Knowledge · FPCR · Map · Rules Tabs</div>
+    <div class="row">
+
+      <!-- Knowledge Tab -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span><div class="tab-badge">3</div></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-radius:6px;background:#252538;border:1px solid #313244">
+                  <span style="color:#6c7086;font-size:12px">🔍</span>
+                  <input placeholder="Search knowledge base..." style="flex:1;background:transparent;border:none;color:#cdd6f4;font-size:11px;outline:none;font-family:inherit" readonly />
+                </div>
+                <div class="section-title">Module: cursor-extension/</div>
+                <div class="k-card k-card-gotcha">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span style="color:#f38ba8;font-size:10px">⚠</span>
+                    <span class="pill pill-sm" style="color:#f38ba8;background:#f38ba822;border:1px solid #f38ba833">GOTCHA</span>
+                    <span style="font-size:9px;color:#6c7086">cursor-extension/</span>
+                  </div>
+                  <p style="font-size:11px;color:#cdd6f4;line-height:1.5">Extension must use CJS format — ESM is not supported by vscode webviews</p>
+                </div>
+                <div class="k-card k-card-pattern">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span style="color:#a6e3a1;font-size:10px">✓</span>
+                    <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">PATTERN</span>
+                    <span style="font-size:9px;color:#6c7086">mcp-server/</span>
+                  </div>
+                  <p style="font-size:11px;color:#cdd6f4;line-height:1.5">MCP owns all logic. Extension is read-only — never write to .steer/ from extension</p>
+                </div>
+                <div class="k-card k-card-convention">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span style="color:#89b4fa;font-size:10px">&lt;/&gt;</span>
+                    <span class="pill pill-sm" style="color:#89b4fa;background:#89b4fa22;border:1px solid #89b4fa33">CONVENTION</span>
+                    <span style="font-size:9px;color:#6c7086">core/</span>
+                  </div>
+                  <p style="font-size:11px;color:#cdd6f4;line-height:1.5">Use Catppuccin palette for all UI tokens. Never hardcode raw color strings</p>
+                </div>
+                <div style="margin-top:auto;padding:8px 10px;border-radius:6px;background:#252538;border:1px solid #313244;display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <div style="font-size:10px;color:#cdd6f4;font-weight:600">Knowledge Stats</div>
+                    <div style="font-size:9px;color:#6c7086">3 modules · 12 learnings</div>
+                  </div>
+                  <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">ACTIVE</span>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">83.1%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">Knowledge Tab — gotcha/pattern/convention cards</div>
+      </div>
+
+      <!-- FPCR Tab -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span></button>
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div class="section-title">FPCR Telemetry</div>
+                <div style="display:flex;gap:6px">
+                  <div class="metric-card">
+                    <div class="metric-label">First-Pass Rate</div>
+                    <div style="display:flex;align-items:baseline;gap:4px">
+                      <span class="metric-value" style="color:#a6e3a1">83.1</span>
+                      <span style="font-size:10px;color:#6c7086">%</span>
+                    </div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="metric-label">Avg Rounds</div>
+                    <div style="display:flex;align-items:baseline;gap:4px">
+                      <span class="metric-value" style="color:#89b4fa">1.4</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <div class="metric-card">
+                    <div class="metric-label">Tasks Done</div>
+                    <div style="display:flex;align-items:baseline;gap:4px">
+                      <span class="metric-value" style="color:#f5a623">29</span>
+                    </div>
+                  </div>
+                  <div class="metric-card">
+                    <div class="metric-label">Knowledge Files</div>
+                    <div style="display:flex;align-items:baseline;gap:4px">
+                      <span class="metric-value" style="color:#cba6f7">3</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Mini bar chart: last 12 tasks -->
+                <div class="card">
+                  <div class="section-title" style="margin-bottom:8px">Last 12 Tasks</div>
+                  <div style="display:flex;align-items:flex-end;gap:3px;height:60px">
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:40%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:80%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:60%;background:#f38ba8"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:40%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:100%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:40%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:60%;background:#f38ba8"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:80%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:40%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:60%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:80%;background:#a6e3a1"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="width:100%;border-radius:2px;height:40%;background:#a6e3a1"></div></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px">
+                    <span style="color:#a6e3a1">● pass</span>
+                    <span style="color:#f38ba8">● fail</span>
+                  </div>
+                </div>
+                <!-- Model routing bar -->
+                <div class="card">
+                  <div class="section-title" style="margin-bottom:6px">Model Routing</div>
+                  <div style="display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden">
+                    <div style="width:15%;background:#cba6f7"></div>
+                    <div style="width:60%;background:#89b4fa"></div>
+                    <div style="width:25%;background:#94e2d5"></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;margin-top:4px">
+                    <span style="font-size:8px;color:#cba6f7">● Opus 15%</span>
+                    <span style="font-size:8px;color:#89b4fa">● Sonnet 60%</span>
+                    <span style="font-size:8px;color:#94e2d5">● Haiku 25%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">83.1%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">FPCR Tab — metrics + bar chart + model routing</div>
+      </div>
+
+      <!-- Map Tab -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div class="section-title">Codebase Intelligence</div>
+                <div class="card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <span style="font-size:10px;font-weight:600;color:#cdd6f4">Codebase Map</span>
+                    <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">INDEXED</span>
+                  </div>
+                  <div style="display:flex;gap:12px;font-size:9px;color:#6c7086">
+                    <span>47 files</span><span>·</span><span>183 deps</span><span>·</span><span>4 modules</span>
+                  </div>
+                </div>
+                <div class="card" style="flex:1;font-family:'JetBrains Mono','Fira Code',monospace;font-size:10px">
+                  <div class="section-title" style="margin-bottom:6px;font-family:inherit">Module Map</div>
+                  <!-- core -->
+                  <div style="margin-bottom:4px">
+                    <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+                      <span style="color:#45475a;font-size:8px">▶</span>
+                      <span style="flex:1;color:#cdd6f4">core/</span>
+                      <span style="font-size:8px;color:#6c7086">18f</span>
+                      <span class="pill pill-sm" style="color:#f38ba8;background:#f38ba822;border:1px solid #f38ba833">HIGH</span>
+                    </div>
+                    <div style="padding-left:16px;color:#6c7086;font-size:10px"><span style="color:#45475a;font-size:8px;width:10px;display:inline-block">└</span> index.ts</div>
+                    <div style="padding-left:16px;color:#6c7086;font-size:10px"><span style="color:#45475a;font-size:8px;width:10px;display:inline-block">└</span> state.ts</div>
+                    <div style="padding-left:16px;color:#6c7086;font-size:10px"><span style="color:#45475a;font-size:8px;width:10px;display:inline-block">└</span> learner.ts</div>
+                    <div style="padding-left:16px;color:#f5a623;font-size:9px;cursor:pointer">+15 more ▼</div>
+                  </div>
+                  <!-- mcp-server -->
+                  <div style="margin-bottom:4px">
+                    <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+                      <span style="color:#45475a;font-size:8px">▶</span>
+                      <span style="flex:1;color:#cdd6f4">mcp-server/</span>
+                      <span style="font-size:8px;color:#6c7086">12f</span>
+                      <span class="pill pill-sm" style="color:#f5a623;background:#f5a62322;border:1px solid #f5a62333">MED</span>
+                    </div>
+                    <div style="padding-left:16px;color:#6c7086;font-size:10px"><span style="color:#45475a;font-size:8px;width:10px;display:inline-block">└</span> index.ts</div>
+                    <div style="padding-left:16px;color:#6c7086;font-size:10px"><span style="color:#45475a;font-size:8px;width:10px;display:inline-block">└</span> tools/run.ts</div>
+                  </div>
+                  <!-- extension -->
+                  <div style="margin-bottom:4px">
+                    <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+                      <span style="color:#45475a;font-size:8px">▶</span>
+                      <span style="flex:1;color:#cdd6f4">cursor-extension/</span>
+                      <span style="font-size:8px;color:#6c7086">7f</span>
+                      <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">LOW</span>
+                    </div>
+                  </div>
+                  <!-- cli -->
+                  <div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+                      <span style="color:#45475a;font-size:8px">▶</span>
+                      <span style="flex:1;color:#cdd6f4">cli/</span>
+                      <span style="font-size:8px;color:#6c7086">10f</span>
+                      <span class="pill pill-sm" style="color:#a6e3a1;background:#a6e3a122;border:1px solid #a6e3a133">LOW</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align:center">
+                  <button style="padding:6px 12px;border-radius:4px;background:#252538;border:1px solid #313244;color:#6c7086;font-size:10px;cursor:pointer;font-family:inherit">Rebuild Map</button>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">83.1%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">Map Tab — module tree, risk pills, expandable</div>
+      </div>
+
+      <!-- Rules Tab -->
+      <div>
+        <div class="ext-frame">
+          <div class="shell">
+            <div class="title-bar">
+              <div class="logo">S</div>
+              <span class="title-text">SteerAgent</span>
+              <span class="pill pill-sm" style="color:#f5a623;background:#f5a62318;border:1px solid #f5a62333">steer-agent-tool</span>
+              <div class="connected"><div class="connected-dot"></div><span class="connected-text">Connected</span></div>
+            </div>
+            <div class="main">
+              <div class="tab-rail">
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>TASK</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg><span>KNOW</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>FPCR</span></button>
+                <button class="tab-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span>MAP</span></button>
+                <button class="tab-btn active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>RULES</span></button>
+              </div>
+              <div class="content">
+                <div class="section-title">Active Rules — RULES.md</div>
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:#252538;border:1px solid #313244;margin-bottom:4px">
+                  <span style="font-size:9px;font-weight:700;color:#6c7086;font-family:monospace">R1</span>
+                  <span style="font-size:11px;color:#cdd6f4;flex:1">MCP owns all logic. Extension NEVER writes to .steer/ directly</span>
+                  <span class="pill pill-sm" style="color:#f38ba8;background:#f38ba822;border:1px solid #f38ba833">BLOCK</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:#252538;border:1px solid #313244;margin-bottom:4px">
+                  <span style="font-size:9px;font-weight:700;color:#6c7086;font-family:monospace">R2</span>
+                  <span style="font-size:11px;color:#cdd6f4;flex:1">No auto-send ever. Developer always confirms</span>
+                  <span class="pill pill-sm" style="color:#f38ba8;background:#f38ba822;border:1px solid #f38ba833">BLOCK</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:#252538;border:1px solid #313244;margin-bottom:4px">
+                  <span style="font-size:9px;font-weight:700;color:#6c7086;font-family:monospace">R3</span>
+                  <span style="font-size:11px;color:#cdd6f4;flex:1">Should use Catppuccin palette for all UI tokens</span>
+                  <span class="pill pill-sm" style="color:#f5a623;background:#f5a62322;border:1px solid #f5a62333">WARN</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:#252538;border:1px solid #313244;margin-bottom:4px">
+                  <span style="font-size:9px;font-weight:700;color:#6c7086;font-family:monospace">R4</span>
+                  <span style="font-size:11px;color:#cdd6f4;flex:1">Deterministic governance: no AI in scoring or gating</span>
+                  <span class="pill pill-sm" style="color:#94e2d5;background:#94e2d522;border:1px solid #94e2d533">AUTO</span>
+                </div>
+                <div class="section-title" style="margin-top:8px">Hooks</div>
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:#181825;margin-bottom:3px">
+                  <span style="font-size:8px;font-weight:600;color:#94e2d5;font-family:monospace;padding:1px 4px;background:#94e2d518;border-radius:3px">beforeSend</span>
+                  <span style="font-size:10px;color:#6c7086;flex:1">steer_gate --auto</span>
+                  <div style="width:6px;height:6px;border-radius:50%;background:#a6e3a1"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:#181825;margin-bottom:3px">
+                  <span style="font-size:8px;font-weight:600;color:#94e2d5;font-family:monospace;padding:1px 4px;background:#94e2d518;border-radius:3px">afterTask</span>
+                  <span style="font-size:10px;color:#6c7086;flex:1">steer_learn --auto</span>
+                  <div style="width:6px;height:6px;border-radius:50%;background:#a6e3a1"></div>
+                </div>
+                <div style="margin-top:auto;padding:10px 12px;border-radius:8px;background:#252538;border:1px solid #f5a62333">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span style="font-size:11px;font-weight:600;color:#f5a623">Governance Active</span>
+                  </div>
+                  <p style="font-size:10px;color:#6c7086">Deterministic scoring · File-based state · All tasks logged</p>
+                </div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <span style="color:#a6e3a1">●</span><span>MCP Ready</span>
+              <span class="sep">|</span><span>Map: 47 files</span>
+              <span class="sep">|</span><span>Sonnet 4</span>
+              <span style="margin-left:auto">FPCR: <span style="color:#a6e3a1;font-weight:600">83.1%</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ext-label">Rules Tab — BLOCK/WARN/AUTO pills + hooks</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  Build verification summary                           -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div style="padding:16px 20px;border-radius:10px;background:#252538;border:1px solid #313244;font-size:11px;color:#cdd6f4;max-width:800px">
+    <div style="font-size:12px;font-weight:700;color:#f5a623;margin-bottom:12px">Build & Visual Flow Verification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Core build (tsup ESM+CJS) — 68 KB</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Extension build (esbuild CJS) — 443 KB</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> MCP server build — 33 KB</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> TypeCheck — 0 errors</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Task Tab — 3 states (idle, active, done)</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Knowledge Tab — gotcha/pattern/convention</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> FPCR Tab — metrics + bar chart + routing</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Map Tab — module tree with risk pills</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Rules Tab — BLOCK/WARN/AUTO + hooks</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> Status bar — FPCR + model + map summary</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> SessionState watcher (.steer/last-gate.json)</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:#a6e3a1">✓</span> 8-step workflow stepper with progress fill</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
