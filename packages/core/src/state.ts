@@ -91,6 +91,22 @@ export function createNewTask(taskId: string, mode: Mode): TaskState {
   };
 }
 
+/**
+ * Calculate a human-readable duration string between two ISO timestamps.
+ * Returns "0s" if startedAt is undefined.
+ */
+export function computeDuration(startedAt: string | undefined, endedAt: string): string {
+  if (!startedAt) return "0s";
+  const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 export function transitionStep(state: TaskState, nextStep: StepName): TaskState {
   const now = new Date().toISOString();
 

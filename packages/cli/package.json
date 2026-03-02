@@ -1,6 +1,6 @@
 {
   "name": "@coinswitch/steer-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI Workflow Governance — MCP Server + CLI for Claude Code",
   "author": "Apurv Singh <apurv.singh@coinswitch.co>",
   "license": "UNLICENSED",

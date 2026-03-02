@@ -3,6 +3,9 @@ import { join } from "path";
 import { LearningEntry, LearningCategory } from "./types.js";
 import { TaskState } from "./state.js";
 
+// Re-export for backwards compatibility with tests and existing imports
+export { completeTask } from "./completion.js";
+
 /**
  * Extract learnings from a completed task using deterministic rules.
  * - Root cause identified → pattern

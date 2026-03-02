@@ -1,4 +1,4 @@
-export const VERSION = "3.0.0";
+export const VERSION = "0.2.0";
 
 // Types
 export type {
@@ -54,7 +54,7 @@ export * as telemetry from "./telemetry.js";
 export { buildCodebaseMap } from "./codemap-static.js";
 
 // State machine
-export { createNewTask, transitionStep, INITIAL_STATE } from "./state.js";
+export { createNewTask, transitionStep, computeDuration, INITIAL_STATE } from "./state.js";
 export type { TaskState, StepName, StepStatus } from "./state.js";
 
 // Init & Start
@@ -71,7 +71,16 @@ export { findSimilarTasks } from "./similarTasks.js";
 export { buildPlan, computeImpact } from "./planBuilder.js";
 export type { PlanContext } from "./planBuilder.js";
 export { runVerification } from "./verifier.js";
+export { runReflection } from "./reflection.js";
+export type { ReflectionResult } from "./reflection.js";
 export { extractLearnings, persistLearnings, updateKnowledgeFile } from "./learner.js";
+export { shouldSpawnSubAgents } from "./subagent.js";
+export type { SubAgentDecision, SubAgentAssignment } from "./subagent.js";
+export { generateCommitMessage } from "./commit-gen.js";
+export { generatePRDescription } from "./pr-gen.js";
+export { completeTask } from "./completion.js";
+export type { HistoryEntry } from "./completion.js";
+export { logSteer, logToolCall } from "./logger.js";
 
 // Path resolution
 export { findSteerDir, steerDirExists } from "./paths.js";

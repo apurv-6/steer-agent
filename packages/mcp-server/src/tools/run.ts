@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import type { RouteResult } from "@steer-agent-tool/core";
 import {
   transitionStep,
   assemblePrompt,
@@ -151,11 +152,22 @@ function planPhase(state: TaskState, statePath: string, cwd: string, args: RunAr
   const subAgentDecision = shouldSpawnSubAgents(state);
   state.subAgentDecision = subAgentDecision;
 
-  // Model routing
+  // Model routing — read default tier from config
+  const configPath = join(cwd, ".steer", "config.json");
+  let defaultTier: RouteResult["tier"] = "small";
+  if (existsSync(configPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      const cfgDefault: string = cfg?.modelPolicy?.default ?? cfg?.routing?.defaultModel ?? "small";
+      if (cfgDefault === "mid" || cfgDefault === "high") defaultTier = cfgDefault;
+    } catch {}
+  }
+
   const routeResult = routeModel({
     mode: state.mode as any,
     score: state.score ?? 5,
     gitImpact: undefined,
+    defaultTier,
   });
   state.modelTier = routeResult.tier;
   state.modelReason = routeResult.reason;
@@ -234,6 +246,21 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
   state.resumable = false;
   writeFileSync(statePath, JSON.stringify(state, null, 2));
 
+  // Build sub-agent instructions if split was recommended
+  const subAgentInstructions = state.subAgentDecision?.shouldSplit
+    ? {
+        recommended: true,
+        reason: state.subAgentDecision.reason,
+        agents: (state.subAgentDecision.agents as Array<{ id: string; files: string[]; description: string }>).map((a) => ({
+          id: a.id,
+          files: a.files,
+          description: a.description,
+          instruction: `Execute only these files: ${a.files.join(", ")}. Do not touch files assigned to other agents.`,
+        })),
+        note: "Spawn each agent as an independent Task with its own file scope. Merge results when all complete.",
+      }
+    : { recommended: false };
+
   return {
     content: [{
       type: "text" as const,
@@ -251,6 +278,7 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
           summary: verificationResult.summary,
         },
         learnings: learnings.length,
+        subAgentInstructions,
         commitMessage: commitMsg,
         prDescription,
         message: "Task completed. All 9 workflow steps visited.",
