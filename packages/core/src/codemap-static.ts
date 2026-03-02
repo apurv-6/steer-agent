@@ -160,9 +160,8 @@ async function calculateCoupling(root: string): Promise<ChangeCoupling> {
               coupling[file1][file2] = parseFloat((countAB / countA).toFixed(2));
           }
       }
-  } catch (e) {
-      // Git might not be initialized
-      console.warn("Git coupling analysis failed (likely no git repo):", e);
+  } catch {
+      // Git not initialized or no commits yet — skip coupling analysis silently
   }
 
   return coupling;

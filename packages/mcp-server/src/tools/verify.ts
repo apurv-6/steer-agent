@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runVerification, loadHooks, transitionStep } from "@steer-agent-tool/core";
+import { runVerification, loadHooks, transitionStep, steerDirExists } from "@steer-agent-tool/core";
 
 export const VerifySchema = {
   taskId: z.string().describe("Task ID to verify"),
@@ -11,6 +11,12 @@ export const VerifySchema = {
 export async function handleVerify(args: { taskId: string; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
 
     const statePath = join(cwd, ".steer", "state", "current-task.json");
     const state = JSON.parse(readFileSync(statePath, "utf-8"));

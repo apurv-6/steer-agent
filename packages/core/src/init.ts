@@ -232,8 +232,86 @@ REVIEW: {expected_behavior} is restored
 `
 };
 
-export async function initSteer(cwd: string) {
+export interface InitOptions {
+  template?: "coinswitch" | "minimal" | "strict";
+  team?: string;
+  org?: string;
+  force?: boolean;
+  noTemplates?: boolean;
+}
+
+interface Preset {
+  criticalModules: string[];
+  rules: string;
+  modelPolicy: { default: string; criticalModules: string };
+}
+
+const PRESETS: Record<string, Preset> = {
+  coinswitch: {
+    criticalModules: ["auth", "payments", "trading", "crypto", "kyc"],
+    rules: `# SteerAgent Rules — CoinSwitch
+
+## R1 — Scope Restriction [BLOCK]
+Never modify files outside the task's declared file scope.
+
+## R2 — Critical Module Guard [BLOCK]
+auth/, payments/, trading/, crypto/, kyc/ require explicit approval before modification.
+
+## R3 — Test Coverage [WARN]
+No function longer than 20 lines without tests.
+
+## R4 — Repository Pattern [BLOCK]
+No direct database queries. All data access must go through the repository pattern.
+
+## R5 — PR Size Limit [WARN]
+Maximum 300 lines of code per PR. Warning shown at 250 LOC.
+
+## R6 — Lint Before Commit [AUTO]
+Automatically run eslint + prettier before every commit.
+
+## R7 — No Direct Redis [BLOCK]
+No direct Redis calls. Use CacheService.
+`,
+    modelPolicy: { default: "mid", criticalModules: "high" },
+  },
+  minimal: {
+    criticalModules: [],
+    rules: `# SteerAgent Rules — Minimal
+
+## R1 — Scope Restriction [BLOCK]
+Never modify files outside the task's declared file scope.
+
+## R2 — Test Coverage [WARN]
+New code should have tests where practical.
+`,
+    modelPolicy: { default: "mid", criticalModules: "high" },
+  },
+  strict: {
+    criticalModules: [],
+    rules: `# SteerAgent Rules — Strict
+
+## R1 — Scope Restriction [BLOCK]
+Never modify files outside the task's declared file scope.
+
+## R2 — Test Coverage [BLOCK]
+All new functions must have tests. No exceptions.
+
+## R3 — PR Size Limit [BLOCK]
+Maximum 200 lines of code per PR.
+
+## R4 — No console.log [BLOCK]
+No console.log statements in production code.
+
+## R5 — Branch Coverage [BLOCK]
+100% branch coverage required for changed files.
+`,
+    modelPolicy: { default: "high", criticalModules: "high" },
+  },
+};
+
+export async function initSteer(cwd: string, opts: InitOptions = {}) {
   const steerDir = path.join(cwd, ".steer");
+  const preset = PRESETS[opts.template ?? "minimal"] ?? PRESETS.minimal;
 
   // 1. Create directories
   await fs.ensureDir(path.join(steerDir, "templates"));
@@ -241,18 +319,33 @@ export async function initSteer(cwd: string) {
   await fs.ensureDir(path.join(steerDir, "knowledge"));
   await fs.ensureDir(path.join(steerDir, "embeddings"));
 
-  // 2. Write config.json
-  await fs.writeJSON(path.join(steerDir, "config.json"), DEFAULT_CONFIG, { spaces: 2 });
+  // 2. Write config.json (merge preset + user opts)
+  const config = {
+    ...DEFAULT_CONFIG,
+    team: opts.team ?? DEFAULT_CONFIG.team,
+    organization: opts.org ?? "default",
+    defaults: {
+      ...DEFAULT_CONFIG.defaults,
+      criticalModules: preset.criticalModules,
+    },
+    modelPolicy: {
+      ...DEFAULT_CONFIG.modelPolicy,
+      ...preset.modelPolicy,
+    },
+  };
+  await fs.writeJSON(path.join(steerDir, "config.json"), config, { spaces: 2 });
 
-  // 3. Write RULES.md
-  await fs.writeFile(path.join(steerDir, "RULES.md"), DEFAULT_RULES);
+  // 3. Write RULES.md (preset-specific)
+  await fs.writeFile(path.join(steerDir, "RULES.md"), preset.rules);
 
   // 4. Write hooks.yaml
   await fs.writeFile(path.join(steerDir, "hooks.yaml"), DEFAULT_HOOKS);
 
-  // 5. Write Templates
-  for (const [filename, content] of Object.entries(TEMPLATES)) {
-    await fs.writeFile(path.join(steerDir, "templates", filename), content);
+  // 5. Write Templates (unless --no-templates)
+  if (!opts.noTemplates) {
+    for (const [filename, content] of Object.entries(TEMPLATES)) {
+      await fs.writeFile(path.join(steerDir, "templates", filename), content);
+    }
   }
 
   // 6. Create knowledge/_global.md
@@ -267,8 +360,20 @@ export async function initSteer(cwd: string) {
     await fs.writeFile(logPath, `# SteerAgent Log — initialized ${new Date().toISOString()}\n`);
   }
 
-  // 8. Build Codebase Map
-  console.log("Building codebase map...");
+  // 8. Add .steer/state/ to .gitignore
+  const gitignorePath = path.join(cwd, ".gitignore");
+  const gitignoreEntries = "\n# SteerAgent runtime state\n.steer/state/\n.steer/embeddings/\n";
+  if (await fs.pathExists(gitignorePath)) {
+    const existing = await fs.readFile(gitignorePath, "utf8");
+    if (!existing.includes(".steer/state/")) {
+      await fs.appendFile(gitignorePath, gitignoreEntries);
+    }
+  } else {
+    await fs.writeFile(gitignorePath, gitignoreEntries.trimStart());
+  }
+
+  // 9. Build Codebase Map
+  console.error("Building codebase map...");
   try {
     const map = await buildCodebaseMap(cwd);
     await fs.writeJSON(path.join(steerDir, "codebase-map.json"), map, { spaces: 2 });

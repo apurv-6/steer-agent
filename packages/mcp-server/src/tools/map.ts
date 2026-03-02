@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
-import { buildCodebaseMap } from "@steer-agent-tool/core";
+import { buildCodebaseMap, steerDirExists } from "@steer-agent-tool/core";
 
 export const MapSchema = {
   action: z.enum(["rebuild", "query"]).optional().describe("Rebuild the map or query it (default: query)"),
@@ -12,6 +12,13 @@ export const MapSchema = {
 export async function handleMap(args: { action?: string; query?: string; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
     const action = args.action || "query";
     const mapPath = join(cwd, ".steer", "codebase-map.json");
 

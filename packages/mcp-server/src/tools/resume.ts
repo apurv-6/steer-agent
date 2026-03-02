@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { steerDirExists } from "@steer-agent-tool/core";
 
 export const ResumeSchema = {
   cwd: z.string().optional().describe("Root directory (defaults to cwd)"),
@@ -9,6 +10,13 @@ export const ResumeSchema = {
 export async function handleResume(args: { cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
     const statePath = join(cwd, ".steer", "state", "current-task.json");
 
     if (!existsSync(statePath)) {

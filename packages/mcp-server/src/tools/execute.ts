@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { transitionStep } from "@steer-agent-tool/core";
+import { transitionStep, steerDirExists } from "@steer-agent-tool/core";
 
 export const ExecuteSchema = {
   taskId: z.string().describe("Task ID to execute"),
@@ -12,6 +12,12 @@ export const ExecuteSchema = {
 export async function handleExecute(args: { taskId: string; approved?: boolean; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
 
     const statePath = join(cwd, ".steer", "state", "current-task.json");
     const state = JSON.parse(readFileSync(statePath, "utf-8"));
@@ -31,9 +37,18 @@ export async function handleExecute(args: { taskId: string; approved?: boolean; 
         text: JSON.stringify({
           status: "executing",
           taskId: args.taskId,
-          planSteps: state.planSteps?.length || 0,
-          files: state.files,
-          message: "Execution started. Proceed with implementation.",
+          goal: state.goal || "",
+          message: "Implement the following plan steps. When done, call steer.verify to check results.",
+          implementationSteps: (state.planSteps || []).map((s: any) => ({
+            id: s.id,
+            file: s.files?.[0],
+            action: s.action,
+            description: s.description,
+            reason: s.reason,
+            risk: s.risk,
+          })),
+          acceptanceCriteria: state.acceptanceCriteria || [],
+          hint: "Modify the listed files, then call steer.verify to run checks.",
         }, null, 2),
       }],
     };

@@ -19,6 +19,7 @@ import {
   loadModuleKnowledge,
   loadHooks,
   logToolCall,
+  steerDirExists,
 } from "@steer-agent-tool/core";
 import type { TaskState, AssemblyContext } from "@steer-agent-tool/core";
 
@@ -49,6 +50,13 @@ interface RunArgs {
 export async function handleRun(args: RunArgs) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
     try { logToolCall("steer.run", { taskId: args.taskId, approved: args.approved }, cwd); } catch {}
 
     const statePath = join(cwd, ".steer", "state", "current-task.json");
@@ -188,11 +196,12 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
   const hooks = loadHooks(cwd);
   const reflectionResult = runReflection(state, cwd, hooks);
   state.reflectionPassed = reflectionResult.passed;
+  state.reflectionIssues = reflectionResult.issues;
   state = transitionStep(state, "reflection");
   writeFileSync(statePath, JSON.stringify(state, null, 2));
 
   // ── Step 5→6: reflection → verification ──
-  const verificationResult = runVerification(state, hooksForVerify, cwd);
+  const verificationResult = runVerification(state, hooks, cwd);
   state.verificationOutcome = verificationResult;
   state = transitionStep(state, "verification");
   writeFileSync(statePath, JSON.stringify(state, null, 2));

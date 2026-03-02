@@ -1,0 +1,61 @@
+image: node:20
+
+definitions:
+  caches:
+    npm: ~/.npm
+
+  steps:
+    - step: &build-and-test
+        name: Build & Test
+        caches:
+          - npm
+        script:
+          - npm ci
+          - npm run build --workspaces
+          - npm run typecheck --workspaces --if-present
+          - npm test --workspaces --if-present
+        artifacts:
+          - packages/*/dist/**
+
+    - step: &publish
+        name: Publish to Artifactory
+        trigger: manual
+        caches:
+          - npm
+        script:
+          - npm ci
+          - npm run build --workspaces
+          # Authenticate to CoinSwitch Artifactory
+          - echo "//artifactory.coinswitch.co/npm/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+          - echo "@coinswitch:registry=https://artifactory.coinswitch.co/npm/" >> ~/.npmrc
+          # Publish CLI package (the distributable)
+          - npm publish --workspace=packages/cli --access restricted
+        after-script:
+          # Clean up auth token from npmrc
+          - rm -f ~/.npmrc
+
+pipelines:
+  branches:
+    main:
+      - step: *build-and-test
+      - step: *publish
+
+    develop:
+      - step: *build-and-test
+
+  pull-requests:
+    '**':
+      - step:
+          name: PR Check
+          caches:
+            - npm
+          script:
+            - npm ci
+            - npm run build --workspaces
+            - npm run typecheck --workspaces --if-present
+            - npm test --workspaces --if-present
+
+  tags:
+    'v*':
+      - step: *build-and-test
+      - step: *publish

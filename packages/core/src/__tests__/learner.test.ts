@@ -18,10 +18,12 @@ describe("learner", () => {
     const task = createNewTask("t1", "bugfix");
     task.reflectionPassed = false;
     task.files = ["src/auth/login.ts"];
+    task.goal = "fix login null pointer";  // required for pattern to emit
 
     const learnings = extractLearnings(task);
     const pattern = learnings.find((l) => l.category === "pattern");
     expect(pattern).toBeDefined();
+    expect(pattern!.summary).toContain("fix login null pointer");
   });
 
   it("extracts convention when verification failed", () => {

@@ -26,19 +26,21 @@ Works in **any MCP host**: Cursor, VS Code, Claude Code, OpenCode, Gemini CLI, W
 ## Quick Start
 
 ```bash
-# Setup
-npx steer-agent-tool init       # Create .steer/, build codebase map
-npx steer-agent-tool mcp        # Start MCP server
+# 1. Install (once per machine):
+npm install -g @coinswitch/steer-agent
+steer-agent install          # Registers MCP server + skills + hooks
 
-# Usage (in any MCP-compatible chat)
-/steer:bugfix COIN-4521         # Bugfix workflow
-/steer:feature                  # Feature workflow
-/steer:refactor                 # Refactor workflow
-/steer:status                   # Check progress
-/steer:resume                   # Resume interrupted task
+# 2. Initialize (once per project):
+cd ~/bitbucketRepo/your-project
+steer-agent init --template coinswitch
 
-# Metrics
-npx steer-agent-tool metrics    # FPCR, iteration index, model usage
+# 3. Use (in Claude Code):
+/steer-start Fix the null pointer in auth/TokenService
+
+# Maintenance:
+steer-agent status           # Check health
+steer-agent doctor           # Auto-fix issues
+steer-agent update           # Update to latest
 ```
 
 ## 8-Step Workflow
@@ -66,24 +68,55 @@ Every task, every mode, every time:
 
 ## MCP Configuration
 
+`steer-agent install` writes this automatically to `~/.claude/settings.json`:
+
 ```json
 {
   "mcpServers": {
     "steer-agent": {
-      "command": "npx",
-      "args": ["steer-agent-tool", "mcp"],
-      "cwd": "/path/to/your/repo"
+      "command": "steer-mcp",
+      "args": [],
+      "env": {}
     }
   }
 }
 ```
 
+## CLI Reference
+
+```
+steer-agent install          Register MCP + skills + hooks (once per machine)
+steer-agent init [options]   Initialize .steer/ in current project
+steer-agent status           Show installation and project health
+steer-agent doctor           Diagnose and auto-fix issues
+steer-agent update           Update to latest version
+steer-agent uninstall        Remove global components (keeps project data)
+```
+
+**Init options:**
+
+```
+--template coinswitch|minimal|strict   Governance preset (default: minimal)
+--team <name>                           Team name
+--org <name>                            Organization name
+--force                                 Overwrite existing .steer/
+```
+
+## Governance Rules
+
+Rules live in `.steer/RULES.md`. Three severities:
+
+| Severity | Behavior |
+|---|---|
+| `[BLOCK]` | Hard stop — must get explicit approval to proceed |
+| `[WARN]` | Warning shown — Claude may continue but must acknowledge |
+| `[AUTO]` | Automatically enforced (e.g. lint before commit) |
+
+Default CoinSwitch preset: scope restriction, auth/payments guard, test coverage, repository pattern, PR size limit, lint-on-commit.
+
 ## Docs
 
 - [Spec v3.0](.planning/SPEC-V3.md) — Full master specification
-- [Setup](docs/SETUP.md) — Installation guide
-- [Workflow](docs/WORKFLOW.md) — Daily usage
-- [Pilot](docs/PILOT.md) — Metrics and success criteria
 
 ## Build
 

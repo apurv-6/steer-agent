@@ -44,6 +44,7 @@ export interface TaskState {
   learningNotes: LearningEntry[];
   goal?: string;            // task goal/description
   acceptanceCriteria?: string[];
+  reflectionIssues?: string[];  // issues found during reflection
 }
 
 export const INITIAL_STATE: TaskState = {

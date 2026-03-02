@@ -1,18 +1,25 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
-import { buildPlan, transitionStep } from "@steer-agent-tool/core";
+import { buildPlan, transitionStep, steerDirExists } from "@steer-agent-tool/core";
 
 export const PlanSchema = {
   taskId: z.string().describe("Task ID to create a plan for"),
   goal: z.string().describe("What should be accomplished"),
   files: z.array(z.string()).optional().describe("Files expected to be modified"),
+  acceptanceCriteria: z.array(z.string()).optional().describe("How to verify the feature works"),
   cwd: z.string().optional().describe("Root directory (defaults to cwd)"),
 };
 
-export async function handlePlan(args: { taskId: string; goal: string; files?: string[]; cwd?: string }) {
+export async function handlePlan(args: { taskId: string; goal: string; files?: string[]; acceptanceCriteria?: string[]; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
 
     const statePath = join(cwd, ".steer", "state", "current-task.json");
     const state = JSON.parse(readFileSync(statePath, "utf-8"));
@@ -27,6 +34,9 @@ export async function handlePlan(args: { taskId: string; goal: string; files?: s
     state.planSteps = steps;
     state.impactPreview = impact;
     state.goal = args.goal;
+    if (args.acceptanceCriteria?.length) {
+      state.acceptanceCriteria = args.acceptanceCriteria;
+    }
     const updated = transitionStep(state, "planning");
     writeFileSync(statePath, JSON.stringify(updated, null, 2));
 

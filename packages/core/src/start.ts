@@ -153,7 +153,7 @@ export async function startTask(options: StartOptions) {
     state,
     message: `Started task ${taskId} in ${mode} mode.`,
     template: frontmatter,
-    initialQuestions: generateInitialQuestions(frontmatter),
+    initialQuestions: generateInitialQuestions(frontmatter, templateBody),
     context
   };
 }
@@ -174,12 +174,19 @@ async function getGitContext(cwd: string, files: string[]): Promise<string> {
   return output;
 }
 
-function generateInitialQuestions(frontmatter: any) {
-  const required = frontmatter.required_fields || [];
+function generateInitialQuestions(frontmatter: any, templateBody: string) {
+  const required: string[] = frontmatter.required_fields || [];
+  // Extract question hints from template body lines like: `- goal: "What feature are you building?"`
+  const hintMap: Record<string, string> = {};
+  for (const line of templateBody.split("\n")) {
+    const m = line.match(/^-\s+(\w+):\s+"(.+)"/);
+    if (m) hintMap[m[1]] = m[2];
+  }
   return required.map((field: string) => ({
     id: field,
-    question: `Please provide: ${field}`,
-    type: "text"
+    question: hintMap[field] ?? `What is the ${field}?`,
+    type: "text",
+    required: true,
   }));
 }
 

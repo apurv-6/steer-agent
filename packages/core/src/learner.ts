@@ -31,13 +31,17 @@ export function extractLearnings(task: TaskState): LearningEntry[] {
   }
 
   // Rule: reflection failed means there's a pattern to learn
-  if (task.reflectionPassed === false) {
+  // Guard: only emit if there's a goal or planned files to give context — avoid generic _global flood
+  if (task.reflectionPassed === false && (task.goal || task.planSteps.length > 0)) {
+    const plannedFiles = task.planSteps.map((s) => s.files[0]).filter(Boolean).join(", ") || "none";
+    const issues = (task as any).reflectionIssues as string[] | undefined;
     learnings.push({
       id: `${task.taskId}-pattern-${learnings.length}`,
       taskId: task.taskId,
       module,
       category: "pattern",
-      summary: `Reflection identified issues in ${task.mode} task on ${module}.`,
+      summary: `Reflection issues in ${task.mode} task${task.goal ? `: ${task.goal.slice(0, 80)}` : ""} (module: ${module})`,
+      detail: `Issues: ${issues?.join("; ") ?? "see reflection"}. Files planned: ${plannedFiles}`,
       createdAt: now,
     });
   }
@@ -52,7 +56,7 @@ export function extractLearnings(task: TaskState): LearningEntry[] {
       taskId: task.taskId,
       module,
       category: "convention",
-      summary: `Verification failures: ${failedChecks.join(", ")}`,
+      summary: `Verification failures: ${failedChecks.join(", ")}${task.goal ? ` [${task.goal.slice(0, 60)}]` : ""}`,
       detail: task.verificationOutcome.summary,
       createdAt: now,
     });

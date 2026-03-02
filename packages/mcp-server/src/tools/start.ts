@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { startTask, Mode } from "@steer-agent-tool/core";
+import { startTask, Mode, steerDirExists } from "@steer-agent-tool/core";
 
 export const StartSchema = {
   mode: z.enum(["chat", "code", "review", "plan", "design", "bugfix", "debug", "feature", "refactor"]).describe("The mode for the task"),
@@ -11,6 +11,13 @@ export const StartSchema = {
 export async function handleStart(args: { mode: string, taskId: string, initialMessage?: string, cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
     const result = await startTask({
       cwd,
       mode: args.mode as Mode,

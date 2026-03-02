@@ -72,3 +72,6 @@ export { buildPlan, computeImpact } from "./planBuilder.js";
 export type { PlanContext } from "./planBuilder.js";
 export { runVerification } from "./verifier.js";
 export { extractLearnings, persistLearnings, updateKnowledgeFile } from "./learner.js";
+
+// Path resolution
+export { findSteerDir, steerDirExists } from "./paths.js";

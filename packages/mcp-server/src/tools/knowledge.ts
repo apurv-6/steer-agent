@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readdirSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { steerDirExists } from "@steer-agent-tool/core";
 
 export const KnowledgeSchema = {
   action: z.enum(["list", "search", "view"]).describe("Action: list all, search by keyword, or view specific module"),
@@ -11,6 +12,13 @@ export const KnowledgeSchema = {
 export async function handleKnowledge(args: { action: string; query?: string; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
     const knowledgeDir = join(cwd, ".steer", "knowledge");
 
     if (!existsSync(knowledgeDir)) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { findSimilarTasks } from "@steer-agent-tool/core";
+import { findSimilarTasks, steerDirExists } from "@steer-agent-tool/core";
 import type { Mode } from "@steer-agent-tool/core";
 
 export const SimilarSchema = {
@@ -12,6 +12,12 @@ export const SimilarSchema = {
 export async function handleSimilar(args: { mode: string; files?: string[]; goal: string; cwd?: string }) {
   try {
     const cwd = args.cwd || process.cwd();
+
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
 
     const results = findSimilarTasks(
       args.mode as Mode,

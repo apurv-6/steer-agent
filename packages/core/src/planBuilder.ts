@@ -23,7 +23,9 @@ export function buildPlan(ctx: PlanContext): { steps: PlanStep[]; impact: Impact
 
     steps.push({
       id: stepId++,
-      description: `Modify ${file}`,
+      description: ctx.goal
+        ? `Modify ${file} to implement: ${ctx.goal.slice(0, 80).replace(/\n/g, " ")}`
+        : `Modify ${file}`,
       files: [file],
       action: "modify",
       risk: determineFileRisk(file, ctx.codemap),
