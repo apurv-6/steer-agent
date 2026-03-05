@@ -1,54 +1,76 @@
-import * as path from "node:path";
 import { z } from "zod";
-import { workflow } from "@steer-agent-tool/core";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import { buildCodebaseMap, steerDirExists } from "@steer-agent-tool/core";
 
-const { buildCodebaseMap, saveCodebaseMap, loadConfig } = workflow;
-
-export const MapParamsSchema = {
-  repoPath: z.string().describe("Absolute path to the repository root"),
-  force: z.boolean().optional().describe("Force full rebuild (default: false)"),
+export const MapSchema = {
+  action: z.enum(["rebuild", "query"]).optional().describe("Rebuild the map or query it (default: query)"),
+  query: z.string().optional().describe("Module or file to query"),
+  cwd: z.string().optional().describe("Root directory (defaults to cwd)"),
 };
 
-export async function handleMap(args: { repoPath: string; force?: boolean }) {
+export async function handleMap(args: { action?: string; query?: string; cwd?: string }) {
   try {
-    const steerDir = path.join(args.repoPath, ".steer");
-    const config = loadConfig(steerDir);
+    const cwd = args.cwd || process.cwd();
 
-    const map = buildCodebaseMap(args.repoPath, config);
-    saveCodebaseMap(steerDir, map);
+    if (!steerDirExists(cwd)) {
+      return {
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
 
-    const moduleCount = Object.keys(map.modules).length;
-    const fileCount = Object.values(map.modules).reduce(
-      (acc, mod) => acc + Object.keys(mod.files).length,
-      0,
-    );
+    const action = args.action || "query";
+    const mapPath = join(cwd, ".steer", "codebase-map.json");
 
-    const depCount = Object.values(map.dependencies).reduce(
-      (acc, dep) => acc + dep.imports.length,
-      0,
-    );
+    if (action === "rebuild") {
+      const map = await buildCodebaseMap(cwd);
+      writeFileSync(mapPath, JSON.stringify(map, null, 2));
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: "rebuilt",
+            modules: Object.keys(map.modules).length,
+            files: Object.keys(map.files).length,
+          }, null, 2),
+        }],
+      };
+    }
 
+    // Query mode
+    if (!existsSync(mapPath)) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "No codebase map. Run steer.init or steer.map with action=rebuild." }) }],
+        isError: true,
+      };
+    }
+
+    const map = JSON.parse(readFileSync(mapPath, "utf-8"));
+    if (args.query) {
+      const module = map.modules[args.query];
+      const file = map.files[args.query];
+      const deps = map.dependencies[args.query];
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ query: args.query, module, file, dependencies: deps }, null, 2),
+        }],
+      };
+    }
+
+    // Summary
     return {
       content: [{
         type: "text" as const,
         text: JSON.stringify({
-          status: "mapped",
-          modules: moduleCount,
-          files: fileCount,
-          dependencies: depCount,
-          language: map.language,
-          buildSystem: map.buildSystem,
-          hasCoupling: !!map.changeCoupling && Object.keys(map.changeCoupling).length > 0,
-          hasOwnership: !!map.ownership && Object.keys(map.ownership).length > 0,
-          message: `Codebase map rebuilt: ${fileCount} files, ${moduleCount} modules, ${depCount} dependency links.`,
+          root: map.root,
+          modules: Object.keys(map.modules),
+          fileCount: Object.keys(map.files).length,
         }, null, 2),
       }],
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }],
-      isError: true,
-    };
+    return { content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }], isError: true };
   }
 }

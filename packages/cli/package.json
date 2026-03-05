@@ -1,21 +1,31 @@
 {
-  "name": "@steer-agent-tool/cli",
-  "version": "0.1.0",
+  "name": "@coinswitch/steer-agent",
+  "version": "0.2.0",
+  "description": "AI Workflow Governance — MCP Server + CLI for Claude Code",
+  "author": "Apurv Singh <apurv.singh@coinswitch.co>",
+  "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "steer-agent-tool": "./dist/index.js"
+    "steer-agent":       "./dist/index.js",
+    "steer-mcp":         "./dist/mcp-entry.js",
+    "steer-hook-prompt": "./dist/hooks/prompt-submit.js"
   },
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@steer-agent-tool/core": "*",
-    "@steer-agent-tool/mcp-server": "*"
-  },
   "devDependencies": {
+    "@steer-agent-tool/core": "*",
+    "@steer-agent-tool/mcp-server": "*",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://artifactory.coinswitch.co/npm/",
+    "access": "restricted"
   }
 }

@@ -12,15 +12,24 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.6",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "fs-extra": "^11.3.3",
+    "glob": "^13.0.6",
+    "yaml": "^2.8.2"
   }
 }

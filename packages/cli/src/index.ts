@@ -1,13 +1,28 @@
 import { VERSION } from "@steer-agent-tool/core";
 
-const [command] = process.argv.slice(2);
+const [command, ...rest] = process.argv.slice(2);
 
 switch (command) {
-  case "steer":
-    await runSteerCmd();
+  case "install":
+    await runInstallCmd(rest);
     break;
   case "init":
-    await runInit();
+    await runInitCmd(rest);
+    break;
+  case "status":
+    await runStatusCmd();
+    break;
+  case "doctor":
+    await runDoctorCmd();
+    break;
+  case "update":
+    await runUpdateCmd(rest);
+    break;
+  case "uninstall":
+    await runUninstallCmd(rest);
+    break;
+  case "steer":
+    await runSteerCmd();
     break;
   case "mcp":
     await runMcp();
@@ -17,36 +32,37 @@ switch (command) {
     break;
   case "--version":
   case "-v":
-    console.log(`steer-agent-tool v${VERSION}`);
+    console.log(`steer-agent v${VERSION}`);
     break;
-  default:
+  case "--help":
+  case "-h":
+  case undefined:
     printUsage();
     break;
+  default:
+    console.error(`Unknown command: ${command}`);
+    printUsage();
+    process.exit(1);
 }
 
-async function runInit(): Promise<void> {
-  const { mkdirSync, existsSync } = await import("node:fs");
+async function runInstallCmd(argv: string[]): Promise<void> {
+  const { runInstall } = await import("./install.js");
+  await runInstall(argv);
+}
 
-  // Check Node version
-  const [major] = process.versions.node.split(".").map(Number);
-  if (major < 18) {
-    console.error(`Node.js >= 18 required (found ${process.versions.node})`);
-    process.exit(1);
-  }
-  console.log(`Node.js ${process.versions.node} — OK`);
+async function runInitCmd(argv: string[]): Promise<void> {
+  const { runInit } = await import("./init.js");
+  await runInit(argv);
+}
 
-  // Create data directory
-  if (!existsSync("./data")) {
-    mkdirSync("./data", { recursive: true });
-    console.log("Created ./data directory");
-  } else {
-    console.log("./data directory already exists");
-  }
+async function runStatusCmd(): Promise<void> {
+  const { runStatus } = await import("./status.js");
+  await runStatus();
+}
 
-  console.log("\nSetup complete! Next steps:");
-  console.log("  1. Install the Cursor extension from packages/cursor-extension");
-  console.log('  2. Run "npx steer-agent-tool mcp" to start the MCP server');
-  console.log('  3. Run "npx steer-agent-tool metrics" to view telemetry');
+async function runDoctorCmd(): Promise<void> {
+  const { runDoctor } = await import("./doctor.js");
+  await runDoctor();
 }
 
 async function runSteerCmd(): Promise<void> {
@@ -59,18 +75,38 @@ async function runMcp(): Promise<void> {
   await startServer();
 }
 
+async function runUpdateCmd(argv: string[]): Promise<void> {
+  const { runUpdate } = await import("./update.js");
+  await runUpdate(argv);
+}
+
+async function runUninstallCmd(argv: string[]): Promise<void> {
+  const { runUninstall } = await import("./uninstall.js");
+  await runUninstall(argv);
+}
+
 async function runMetricsCmd(): Promise<void> {
   const { runMetrics } = await import("./metrics.js");
   await runMetrics();
 }
 
 function printUsage(): void {
-  console.log(`steer-agent-tool v${VERSION}
+  console.log(`steer-agent v${VERSION}
 
 Usage:
-  steer-agent-tool steer      Interactive prompt scoring and patching
-  steer-agent-tool init       Set up data directory and verify environment
-  steer-agent-tool mcp        Start the MCP server (stdio)
-  steer-agent-tool metrics    Show telemetry metrics
-  steer-agent-tool --version  Print version`);
+  steer-agent install          Register MCP + skills + hooks globally (run once per machine)
+  steer-agent init [options]   Initialize .steer/ in current project
+  steer-agent status           Show installation and project health
+  steer-agent doctor           Diagnose and auto-fix issues
+  steer-agent update           Update to latest version
+  steer-agent uninstall        Remove global components (keeps project data)
+  steer-agent steer            Interactive prompt scoring (CLI)
+  steer-agent mcp              Start the MCP server (stdio)
+  steer-agent --version        Print version
+
+Init options:
+  --template coinswitch|minimal|strict   Preset (default: minimal)
+  --team <name>                           Team name
+  --org <name>                            Organization name
+  --force                                 Overwrite existing .steer/`);
 }

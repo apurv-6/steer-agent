@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>New Task Button — Before & After</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #0d0d14; color: #cdd6f4; padding: 32px; }
+
+    h1 { font-size: 16px; color: #f5a623; margin-bottom: 4px; }
+    .sub { font-size: 11px; color: #6c7086; margin-bottom: 32px; }
+
+    .section { margin-bottom: 40px; }
+    .section-label {
+      font-size: 10px; font-weight: 700; color: #f5a623;
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px;
+    }
+    .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+
+    /* ── Extension Frame ── */
+    .frame {
+      width: 272px; border-radius: 10px; overflow: hidden;
+      border: 1px solid #313244; box-shadow: 0 8px 24px #00000055;
+      background: #1e1e2e;
+    }
+    .frame-label { font-size: 10px; color: #6c7086; text-align: center; margin-top: 8px; }
+
+    /* ── Design tokens ── */
+    :root {
+      --bg: #1e1e2e; --bgAlt: #181825; --surface: #252538;
+      --border: #313244; --text: #cdd6f4; --textDim: #6c7086;
+      --textMuted: #45475a; --accent: #f5a623; --green: #a6e3a1;
+      --red: #f38ba8; --blue: #89b4fa;
+    }
+
+    /* ── Sidebar chrome ── */
+    .title-bar {
+      display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+      background: var(--bgAlt); border-bottom: 1px solid var(--border);
+    }
+    .logo { width: 18px; height: 18px; border-radius: 3px; background: linear-gradient(135deg,#f5a623,#e8950a); display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#181825; }
+    .title-text { font-size: 11px; font-weight: 700; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; margin-left: auto; }
+
+    .main { display: flex; }
+    .tab-rail { width: 40px; background: var(--bgAlt); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding-top: 4px; }
+    .tab-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 2px; border: none; border-left: 2px solid transparent; background: transparent; color: var(--textDim); font-family: inherit; }
+    .tab-btn.active { background: var(--surface); border-left-color: var(--accent); color: var(--accent); }
+    .tab-btn span { font-size: 7px; font-weight: 600; letter-spacing: 0.03em; }
+
+    .content { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .card { padding: 8px 10px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border); }
+
+    .pill { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
+    .pill-green { color: var(--green); background: #a6e3a122; border: 1px solid #a6e3a133; }
+    .pill-accent { color: var(--accent); background: #f5a62322; border: 1px solid #f5a62333; }
+
+    .status-bar { display:flex;align-items:center;padding:3px 8px;background:var(--bgAlt);border-top:1px solid var(--border);gap:6px;font-size:9px;color:var(--textDim); }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Callout arrows ── */
+    .callout {
+      position: relative; margin-top: 12px; padding: 8px 12px;
+      background: #f5a62311; border: 1px solid #f5a62333; border-radius: 6px;
+      font-size: 10px; color: #f5a623; max-width: 272px;
+    }
+    .callout::before { content: '▲'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); color: #f5a62366; font-size: 12px; }
+
+    /* NEW badge */
+    .new-badge {
+      display: inline-block; padding: 1px 5px; border-radius: 3px;
+      background: #a6e3a133; border: 1px solid #a6e3a166;
+      font-size: 8px; font-weight: 700; color: var(--green);
+      margin-left: 6px; vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<h1>⚡ New Task Button — feature-001</h1>
+<div class="sub">sidebar.ts · 2 insertion points · build ✅ · typecheck ✅</div>
+
+<!-- ── IDLE STATE ── -->
+<div class="section">
+  <div class="section-label">Change 1 — Idle state (no active task)</div>
+  <div class="row">
+
+    <!-- BEFORE -->
+    <div>
+      <div class="frame">
+        <div class="title-bar">
+          <div class="logo">S</div>
+          <span class="title-text">SteerAgent</span>
+          <div class="dot"></div>
+        </div>
+        <div class="main">
+          <div class="tab-rail">
+            <button class="tab-btn active">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>TASK</span>
+            </button>
+          </div>
+          <div class="content">
+            <div class="card" style="text-align:center;padding:20px">
+              <div style="color:#6c7086;font-size:18px;margin-bottom:6px">⚡</div>
+              <div style="font-size:11px;font-weight:600">No active task</div>
+              <div style="font-size:10px;color:#6c7086;margin-top:3px">Use steer.start to begin</div>
+              <!-- NO BUTTON HERE -->
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span style="color:#a6e3a1">●</span> MCP Ready <span style="margin-left:auto">FPCR: —</span></div>
+      </div>
+      <div class="frame-label">Before — no affordance to start fresh</div>
+    </div>
+
+    <!-- ARROW -->
+    <div style="display:flex;align-items:center;padding-top:60px;font-size:20px;color:#f5a62366">→</div>
+
+    <!-- AFTER -->
+    <div>
+      <div class="frame">
+        <div class="title-bar">
+          <div class="logo">S</div>
+          <span class="title-text">SteerAgent</span>
+          <div class="dot"></div>
+        </div>
+        <div class="main">
+          <div class="tab-rail">
+            <button class="tab-btn active">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>TASK</span>
+            </button>
+          </div>
+          <div class="content">
+            <div class="card" style="text-align:center;padding:20px">
+              <div style="color:#6c7086;font-size:18px;margin-bottom:6px">⚡</div>
+              <div style="font-size:11px;font-weight:600">No active task</div>
+              <div style="font-size:10px;color:#6c7086;margin-top:3px;margin-bottom:10px">Use steer.start to begin</div>
+              <!-- NEW BUTTON -->
+              <button style="padding:6px 14px;border-radius:4px;background:#f5a623;border:none;color:#181825;font-size:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+                ▶ New Task
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span style="color:#a6e3a1">●</span> MCP Ready <span style="margin-left:auto">FPCR: —</span></div>
+      </div>
+      <div class="frame-label">After — amber CTA in empty state <span class="new-badge">NEW</span></div>
+      <div class="callout">Calls <code>steeragent.newTask</code> → resets taskId + scoreTrend</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── ACTIVE TASK STATE ── -->
+<div class="section">
+  <div class="section-label">Change 2 — Active task input bar</div>
+  <div class="row">
+
+    <!-- BEFORE -->
+    <div>
+      <div class="frame">
+        <div class="title-bar">
+          <div class="logo">S</div>
+          <span class="title-text">SteerAgent</span>
+          <div class="dot"></div>
+        </div>
+        <div class="main">
+          <div class="tab-rail">
+            <button class="tab-btn active">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>TASK</span>
+            </button>
+          </div>
+          <div class="content">
+            <!-- task header stub -->
+            <div style="padding:8px;border-radius:6px;background:linear-gradient(135deg,#f5a62333,#cba6f722);border:1px solid #f5a62333">
+              <div style="font-size:10px;font-weight:700;color:#f5a623;margin-bottom:2px">⚡ task_m3xr8k</div>
+              <div style="font-size:11px;font-weight:500">Add new task button</div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:4px">
+                <div style="width:6px;height:6px;border-radius:50%;background:#89b4fa"></div>
+                <span style="font-size:9px;color:#89b4fa">Sonnet 4</span>
+                <span class="pill pill-green" style="margin-left:auto">IN PROGRESS</span>
+              </div>
+            </div>
+            <!-- workflow stub -->
+            <div class="card" style="font-size:10px;color:#6c7086">Workflow steps...</div>
+            <!-- input bar WITHOUT reset button -->
+            <div style="padding:7px 8px;border-radius:7px;background:#181825;border:1px solid #313244;margin-top:auto">
+              <div style="display:flex;gap:5px">
+                <input placeholder="Describe task..." style="flex:1;padding:5px 7px;border-radius:3px;background:#252538;border:1px solid #313244;color:#cdd6f4;font-size:10px;outline:none;font-family:inherit" readonly />
+                <button style="padding:5px 8px;border-radius:3px;background:#f5a623;border:none;color:#181825;font-size:9px;font-weight:700;cursor:pointer">▶ STEER</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span style="color:#a6e3a1">●</span> MCP Ready <span style="margin-left:auto">FPCR: 82.4%</span></div>
+      </div>
+      <div class="frame-label">Before — no way to reset mid-task</div>
+    </div>
+
+    <!-- ARROW -->
+    <div style="display:flex;align-items:center;padding-top:80px;font-size:20px;color:#f5a62366">→</div>
+
+    <!-- AFTER -->
+    <div>
+      <div class="frame">
+        <div class="title-bar">
+          <div class="logo">S</div>
+          <span class="title-text">SteerAgent</span>
+          <div class="dot"></div>
+        </div>
+        <div class="main">
+          <div class="tab-rail">
+            <button class="tab-btn active">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>TASK</span>
+            </button>
+          </div>
+          <div class="content">
+            <!-- task header stub -->
+            <div style="padding:8px;border-radius:6px;background:linear-gradient(135deg,#f5a62333,#cba6f722);border:1px solid #f5a62333">
+              <div style="font-size:10px;font-weight:700;color:#f5a623;margin-bottom:2px">⚡ task_m3xr8k</div>
+              <div style="font-size:11px;font-weight:500">Add new task button</div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:4px">
+                <div style="width:6px;height:6px;border-radius:50%;background:#89b4fa"></div>
+                <span style="font-size:9px;color:#89b4fa">Sonnet 4</span>
+                <span class="pill pill-green" style="margin-left:auto">IN PROGRESS</span>
+              </div>
+            </div>
+            <!-- workflow stub -->
+            <div class="card" style="font-size:10px;color:#6c7086">Workflow steps...</div>
+            <!-- input bar WITH reset button -->
+            <div style="padding:7px 8px;border-radius:7px;background:#181825;border:1px solid #313244;margin-top:auto">
+              <div style="display:flex;gap:5px">
+                <input placeholder="Describe task..." style="flex:1;padding:5px 7px;border-radius:3px;background:#252538;border:1px solid #313244;color:#cdd6f4;font-size:10px;outline:none;font-family:inherit" readonly />
+                <!-- NEW RESET ICON -->
+                <button title="Reset to a fresh task" style="padding:5px 7px;border-radius:3px;background:#252538;border:1px solid #313244;color:#6c7086;font-size:11px;font-weight:600;cursor:pointer;line-height:1">↺</button>
+                <button style="padding:5px 8px;border-radius:3px;background:#f5a623;border:none;color:#181825;font-size:9px;font-weight:700;cursor:pointer">▶ STEER</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar"><span style="color:#a6e3a1">●</span> MCP Ready <span style="margin-left:auto">FPCR: 82.4%</span></div>
+      </div>
+      <div class="frame-label">After — ↺ reset icon in input bar <span class="new-badge">NEW</span></div>
+      <div class="callout">↺ fires <code>steeragent.newTask</code> · sidebar auto-refreshes via SessionState event</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── DATA FLOW ── -->
+<div class="section">
+  <div class="section-label">Data flow on click</div>
+  <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;max-width:720px">
+    <div style="padding:8px 12px;border-radius:6px;background:#252538;border:1px solid #313244;font-size:10px;text-align:center">
+      User clicks<br><span style="color:#f5a623;font-weight:600">↺ or New Task</span>
+    </div>
+    <div style="padding:0 10px;color:#6c7086;font-size:14px">→</div>
+    <div style="padding:8px 12px;border-radius:6px;background:#252538;border:1px solid #313244;font-size:10px;text-align:center">
+      <code style="color:#89b4fa">steeragent.newTask</code><br>command fires
+    </div>
+    <div style="padding:0 10px;color:#6c7086;font-size:14px">→</div>
+    <div style="padding:8px 12px;border-radius:6px;background:#252538;border:1px solid #313244;font-size:10px;text-align:center">
+      <code style="color:#cba6f7">sessionState.update()</code><br>resets taskId, scoreTrend,<br>lastScore, gateCallCount
+    </div>
+    <div style="padding:0 10px;color:#6c7086;font-size:14px">→</div>
+    <div style="padding:8px 12px;border-radius:6px;background:#252538;border:1px solid #313244;font-size:10px;text-align:center">
+      <code style="color:#a6e3a1">onDidChange</code> fires<br>→ debouncedRefresh()<br>→ sidebar re-renders
+    </div>
+    <div style="padding:0 10px;color:#6c7086;font-size:14px">→</div>
+    <div style="padding:8px 12px;border-radius:6px;background:#a6e3a122;border:1px solid #a6e3a133;font-size:10px;text-align:center;color:#a6e3a1">
+      Idle state shown<br>fresh task ready ✓
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -14,9 +14,9 @@ const TIER_MODELS: Record<string, { modelName: string; provider: string }> = {
   high: { modelName: "claude-opus-4-20250514", provider: "anthropic" },
 };
 
-export function routeModel(input: RouteInput): RouteResult {
+export function routeModel(input: RouteInput & { defaultTier?: RouteResult["tier"] }): RouteResult {
   const explanations: string[] = [];
-  let tier: RouteResult["tier"] = "small";
+  let tier: RouteResult["tier"] = input.defaultTier ?? "small";
 
   const git = input.gitImpact;
 

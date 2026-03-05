@@ -1,178 +1,117 @@
-# Codebase Structure
+# Structure: SteerAgent v3.0
 
-**Analysis Date:** 2026-02-24
-
-## Directory Layout
+## Repository Layout
 
 ```
 steer-agent-tool/
-├── packages/                    # Monorepo packages
-│   ├── core/                    # Shared library (pure functions)
+├── packages/
+│   ├── core/                        → Core logic (zero deps, pure TS)
 │   │   └── src/
-│   │       ├── __tests__/       # Vitest unit tests
-│   │       ├── types.ts         # Shared type definitions
-│   │       ├── index.ts         # Public API exports
-│   │       ├── scorePrompt.ts   # Prompt scoring logic
-│   │       ├── buildPrompt.ts   # Prompt restructuring
-│   │       ├── generateFollowUps.ts  # Follow-up question generation
-│   │       ├── extractFileRefs.ts    # @reference extraction
-│   │       ├── routeModel.ts    # Model tier routing
-│   │       ├── estimateTokens.ts     # Token estimation
-│   │       └── telemetry.ts     # JSONL telemetry writer
-│   ├── cli/                     # Command-line interface
+│   │       ├── scoring.ts           → Prompt scoring (CLEAR dimensions)
+│   │       ├── routing.ts           → Model routing rules
+│   │       ├── state.ts             → Workflow state machine (8 steps)
+│   │       ├── telemetry.ts         → history.jsonl + metrics
+│   │       ├── hooks.ts             → Hook runner
+│   │       ├── templates.ts         → Template loader + field checker
+│   │       ├── prompt-builder.ts    → Prompt assembly pipeline
+│   │       ├── codemap.ts           → Codebase map builder + querier
+│   │       ├── codemap-static.ts    → Static analysis (V1: regex/imports)
+│   │       ├── dependency-graph.ts  → Dependency resolution
+│   │       ├── change-coupling.ts   → Git log co-change analysis
+│   │       ├── impact.ts            → Change impact calculator
+│   │       ├── similar-tasks.ts     → History search + matching
+│   │       ├── git-context.ts       → Git log, blame, PR detection
+│   │       ├── resume.ts            → Task resumption logic
+│   │       ├── reflection.ts        → Self-review loop (Phase 2)
+│   │       ├── rag/                 → RAG pipeline (Phase 2)
+│   │       ├── commit-gen.ts        → Smart commit (Phase 2)
+│   │       ├── pr-gen.ts            → PR description (Phase 2)
+│   │       └── types.ts             → Shared types
+│   │
+│   ├── mcp-server/                  → MCP server (stdio)
 │   │   └── src/
-│   │       ├── index.ts         # CLI entry point
-│   │       ├── steer.ts         # Interactive steer command
-│   │       ├── gateAdapter.ts   # Gate orchestration (duplicated)
-│   │       └── metrics.ts       # Telemetry aggregation
-│   ├── mcp-server/              # Model Context Protocol server
+│   │       ├── server.ts            → MCP server setup
+│   │       ├── tools/               → One file per MCP tool
+│   │       │   ├── init.ts          → steer.init
+│   │       │   ├── start.ts         → steer.start
+│   │       │   ├── plan.ts          → steer.plan
+│   │       │   ├── execute.ts       → steer.execute
+│   │       │   ├── verify.ts        → steer.verify
+│   │       │   ├── status.ts        → steer.status
+│   │       │   ├── map.ts           → steer.map
+│   │       │   ├── impact.ts        → steer.impact
+│   │       │   ├── resume.ts        → steer.resume
+│   │       │   ├── similar.ts       → steer.similar
+│   │       │   ├── commit.ts        → steer.commit (Phase 2)
+│   │       │   └── pr.ts            → steer.pr (Phase 2)
+│   │       ├── integrations/        → External MCP callers (Phase 2)
+│   │       └── mode-mapper.ts
+│   │
+│   ├── cursor-extension/            → VS Code / Cursor extension
 │   │   └── src/
-│   │       ├── index.ts         # MCP server entry
-│   │       ├── gate.ts          # Gate orchestration (duplicated)
-│   │       └── smoke.mjs        # Smoke test script
-│   └── cursor-extension/        # VS Code/Cursor extension
+│   │       ├── extension.ts         → Entry point
+│   │       ├── panels/              → One file per panel/tab
+│   │       │   ├── task-panel.ts    → Task tab (v2)
+│   │       │   ├── knowledge-panel.ts
+│   │       │   ├── fpcr-panel.ts
+│   │       │   ├── codemap-panel.ts
+│   │       │   ├── rules-panel.ts
+│   │       │   ├── step-tracker.ts  → v1 panel
+│   │       │   ├── impact-view.ts   → v1 panel
+│   │       │   └── task-history.ts  → v1 panel
+│   │       ├── watcher.ts           → .steer/state/ file watcher
+│   │       ├── command-bridge.ts    → VS Code → MCP bridge
+│   │       ├── annotations.ts      → Inline annotations (Phase 2)
+│   │       └── status-bar.ts       → Status bar
+│   │
+│   └── cli/                         → CLI entrypoint
 │       └── src/
-│           ├── extension.ts     # Extension entry point
-│           ├── SessionState.ts  # State management
-│           ├── gateClient.ts    # Gate orchestration (duplicated)
-│           ├── StatusPanel.ts   # Status webview
-│           └── WizardPanel.ts   # Wizard webview
-├── data/                        # Runtime data (gitignored)
-│   └── telemetry.jsonl          # Telemetry events
-├── .cursor/                     # Cursor IDE config
-│   └── commands/                # Custom commands
-├── package.json                 # Workspace root
-└── package-lock.json
+│           ├── init.ts, mcp.ts, metrics.ts, map.ts
+│           └── package.json
+│
+├── templates/                       → Default .steer/ templates
+├── .steer/                          → Per-repo config (created by steer.init)
+│   ├── config.json, RULES.md, hooks.yaml, codebase-map.json
+│   ├── knowledge/                   → Committed (team-shared)
+│   ├── templates/                   → Committed
+│   ├── embeddings/                  → Gitignored (Phase 2)
+│   └── state/                       → Gitignored
+│       ├── current-task.json, history.jsonl, learnings.jsonl, steer.log
+│
+├── .planning/                       → Project planning docs
+├── tasks/                           → Task tracking (todo.md, lessons.md)
+├── CLAUDE.md                        → Agent rules
+├── README.md
+├── package.json                     → Monorepo root
+└── tsconfig.base.json
 ```
-
-## Directory Purposes
-
-**`packages/core/`:**
-- Purpose: Zero-dependency library with prompt analysis logic
-- Contains: Pure TypeScript functions, type definitions, unit tests
-- Key files: `scorePrompt.ts` (scoring algorithm), `buildPrompt.ts` (prompt restructuring), `types.ts` (shared interfaces)
-- Build: tsup → ESM + CJS + .d.ts
-
-**`packages/cli/`:**
-- Purpose: Command-line interface for interactive prompt steering
-- Contains: CLI entry, interactive REPL, telemetry viewer
-- Key files: `index.ts` (command router), `steer.ts` (interactive flow)
-- Build: tsup → ESM binary
-
-**`packages/mcp-server/`:**
-- Purpose: MCP server exposing `steer.gate` tool
-- Contains: MCP SDK integration, gate handler
-- Key files: `index.ts` (server setup), `gate.ts` (tool implementation)
-- Build: tsup → ESM
-
-**`packages/cursor-extension/`:**
-- Purpose: VS Code/Cursor extension with UI integration
-- Contains: Extension activation, commands, chat participant, webviews
-- Key files: `extension.ts` (activation), `SessionState.ts` (state management)
-- Build: esbuild → single JS bundle
-
-**`data/`:**
-- Purpose: Runtime telemetry storage
-- Contains: JSONL event log
-- Generated: Yes (by telemetry.ts)
-- Committed: No (gitignored)
-
-## Key File Locations
-
-**Entry Points:**
-- `packages/cli/src/index.ts`: CLI entry, routes to subcommands
-- `packages/mcp-server/src/index.ts`: MCP server entry, registers tools
-- `packages/cursor-extension/src/extension.ts`: VS Code activation
-
-**Configuration:**
-- `package.json`: Workspace root with npm workspaces config
-- `packages/*/package.json`: Per-package dependencies and scripts
-- `packages/core/tsup.config.ts`: Core build config
-- `packages/mcp-server/tsup.config.ts`: MCP server build config
-- `packages/cursor-extension/esbuild.js`: Extension build config
-
-**Core Logic:**
-- `packages/core/src/scorePrompt.ts`: Prompt quality scoring
-- `packages/core/src/buildPrompt.ts`: Prompt restructuring with sections
-- `packages/core/src/generateFollowUps.ts`: Clarifying question generation
-- `packages/core/src/routeModel.ts`: Model tier routing rules
-
-**Testing:**
-- `packages/core/src/__tests__/*.test.ts`: Unit tests for core functions
-
-## Naming Conventions
-
-**Files:**
-- `camelCase.ts`: All TypeScript source files
-- `UPPERCASE.md`: Planning documents (ARCHITECTURE.md, etc.)
-- Lowercase with hyphens: Config files (`tsup.config.ts`, `package.json`)
-
-**Directories:**
-- `lowercase`: All directories
-- `__tests__`: Test directories (Jest/Vitest convention)
-
-**Functions:**
-- `camelCase`: All functions (`scorePrompt`, `buildPrompt`)
-- Verb-first naming: `generate*`, `extract*`, `build*`, `derive*`
-
-**Types:**
-- `PascalCase`: All interfaces and type aliases (`ScoreResult`, `GateStatus`)
-
-**Constants:**
-- `SCREAMING_SNAKE_CASE`: Module-level constants (`VAGUE_VERBS`, `MAX_QUESTIONS`)
 
 ## Where to Add New Code
 
-**New Core Function:**
-- Implementation: `packages/core/src/newFunction.ts`
-- Export: Add to `packages/core/src/index.ts`
-- Tests: `packages/core/src/__tests__/newFunction.test.ts`
-- Types: Add interfaces to `packages/core/src/types.ts`
+| What | Where |
+|------|-------|
+| Scoring/routing/state logic | `packages/core/src/` |
+| New MCP tool | `packages/mcp-server/src/tools/{name}.ts` |
+| New integration | `packages/mcp-server/src/integrations/{name}.ts` |
+| Extension v2 panel | `packages/cursor-extension/src/panels/{name}.ts` |
+| New template | `templates/` (defaults) or `.steer/templates/` (per-repo) |
+| New hook check | `packages/core/src/hooks.ts` |
+| RAG pipeline | `packages/core/src/rag/` |
 
-**New CLI Command:**
-- Implementation: `packages/cli/src/commandName.ts`
-- Router: Add case in `packages/cli/src/index.ts`
+## .steer/ gitignore Rules
 
-**New MCP Tool:**
-- Implementation: Add handler in `packages/mcp-server/src/index.ts`
-- Register: Use `server.tool()` with schema
+**Committed (team-shared):** config.json, RULES.md, hooks.yaml, codebase-map.json, knowledge/, templates/
 
-**New Extension Command:**
-- Implementation: `packages/cursor-extension/src/extension.ts`
-- Register: Add `vscode.commands.registerCommand()` call
-- Manifest: Add to `contributes.commands` in `package.json`
+**Gitignored:** state/, embeddings/
 
-**New Extension Webview:**
-- Implementation: `packages/cursor-extension/src/PanelName.ts`
-- Register: Add `vscode.window.registerWebviewViewProvider()` call
-- Manifest: Add to `contributes.views` in `package.json`
+## Naming Conventions
 
-**Utilities:**
-- Shared helpers: `packages/core/src/` (if used across packages)
-- Package-specific: `packages/*/src/` within the package
-
-## Special Directories
-
-**`node_modules/`:**
-- Purpose: NPM dependencies (workspace-level hoisting)
-- Generated: Yes (npm install)
-- Committed: No
-
-**`dist/`:**
-- Purpose: Build output for each package
-- Generated: Yes (npm run build)
-- Committed: No
-
-**`data/`:**
-- Purpose: Runtime telemetry storage
-- Generated: Yes (by telemetry.ts at runtime)
-- Committed: No
-
-**`.cursor/`:**
-- Purpose: Cursor IDE configuration
-- Contains: Custom commands
-- Committed: Yes (project-specific config)
+- Files: `kebab-case.ts`
+- Functions: `camelCase`
+- Types/Interfaces: `PascalCase`
+- Constants: `SCREAMING_SNAKE_CASE`
+- MCP tools: `steer.{verb}` (e.g., steer.start, steer.plan)
+- Extension panels: `{name}-panel.ts`
 
 ---
-
-*Structure analysis: 2026-02-24*
+*Canonical spec: `.planning/SPEC-V3.md` | Last updated: 2026-02-28*

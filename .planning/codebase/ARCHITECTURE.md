@@ -1,149 +1,146 @@
-# Architecture
+# Architecture: SteerAgent v3.0
 
-**Analysis Date:** 2026-02-24
-
-## Pattern Overview
-
-**Overall:** Monorepo with layered package architecture
-
-**Key Characteristics:**
-- NPM workspaces monorepo with 4 packages
-- Pure TypeScript codebase (ESM + CJS dual build for core)
-- Shared core library consumed by all surface packages
-- "Gate" system as the central orchestration abstraction
-- No external database—telemetry stored as local JSONL files
-
-## Layers
-
-**Core Library (`packages/core`):**
-- Purpose: Prompt analysis, scoring, and transformation logic
-- Location: `packages/core/src/`
-- Contains: Pure functions for scoring, building, routing prompts
-- Depends on: Nothing (zero internal dependencies)
-- Used by: All other packages (CLI, MCP server, Cursor extension)
-
-**Surface Packages:**
-- Purpose: Expose core functionality through different interfaces
-- Location: `packages/cli/`, `packages/mcp-server/`, `packages/cursor-extension/`
-- Contains: Entry points, adapters, UI components
-- Depends on: `@steer-agent-tool/core`
-- Used by: End users through CLI, MCP protocol, or VS Code/Cursor
-
-**Gate Adapter Layer:**
-- Purpose: Unified orchestration of core functions
-- Location: `packages/*/src/gate*.ts`
-- Contains: `gate()` function that combines scoring → follow-ups → patching → routing → cost estimation
-- Depends on: Core library exports
-- Used by: All surface packages (duplicated implementation)
-
-## Package Dependency Graph
+## 3-Layer Architecture
 
 ```
-                ┌─────────────────┐
-                │     @core       │ ← Zero dependencies
-                └────────┬────────┘
-                         │
-         ┌───────────────┼───────────────┐
-         │               │               │
-         ▼               ▼               ▼
-  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-  │ @mcp-server  │ │    @cli      │ │  extension   │
-  │              │ │              │ │              │
-  └──────────────┘ └──────┬───────┘ └──────────────┘
-         ▲                │
-         │                │
-         └────────────────┘
-              (cli starts mcp)
+┌─────────────────────────────────────────────────┐
+│  Layer 3: VS Code/Cursor Extension              │
+│  v1: READ-ONLY overview panel                   │
+│  v2: Full sidebar (Task, Knowledge, FPCR, Map,  │
+│      Rules) + inline annotations + status bar   │
+│  Watches .steer/state/ + MCP command bridge     │
+├─────────────────────────────────────────────────┤
+│  Layer 2: MCP Server (Workflow Engine)           │
+│  Owns ALL logic and state                       │
+│  14 MCP tools (init, start, plan, execute, etc.)│
+│  Orchestrates external MCP servers (Phase 2)    │
+│  Works in ANY MCP host                          │
+├─────────────────────────────────────────────────┤
+│  Layer 1: .steer/ Folder (Spec Files)           │
+│  Lives in repo, committed to git                │
+│  Templates, rules, config, state, telemetry     │
+│  Codebase map, knowledge files, embeddings      │
+└─────────────────────────────────────────────────┘
 ```
 
-**Dependencies:**
-- `@steer-agent-tool/core`: No internal deps
-- `@steer-agent-tool/mcp-server`: core, @modelcontextprotocol/sdk, zod
-- `@steer-agent-tool/cli`: core, mcp-server
-- `steer-agent-tool-extension`: core, @types/vscode
+## Separation of Concerns
+
+| Surface | Role | Writes to .steer/? |
+|---------|------|-------------------|
+| Chat | Active conversation (questions, plans, execution) | Via MCP only |
+| Extension v1 | Passive display (step tracker, history) | NEVER |
+| Extension v2 | Full experience (5 tabs + input bar + annotations) | Via MCP command bridge |
+
+## State Machine
+
+```
+IDLE → CONTEXT → PROMPT → PLANNING → EXECUTION → REFLECTION → VERIFICATION → LEARNING → DONE
+                                                                    │
+                                                                    ▼
+                                                          (fail → new round)
+                                                          CONTEXT → ... (repeat)
+
+At any point: crash → SUSPENDED (resumable from current-task.json)
+```
+
+## MCP Tools
+
+| Tool | Purpose | Phase |
+|---|---|---|
+| `steer.init` | Onboard repo, build codebase map | V1 |
+| `steer.start` | Begin task, load template, gather context | V1 |
+| `steer.plan` | Propose plan with impact preview | V1 |
+| `steer.execute` | Track execution, scope enforcement | V1 |
+| `steer.verify` | Verification checklist | V1 |
+| `steer.status` | Progress summary (CLI) | V1 |
+| `steer.map` | Rebuild/query codebase map | V1 |
+| `steer.impact` | Change impact preview | V1 |
+| `steer.resume` | Resume interrupted task | V1 |
+| `steer.similar` | Find similar past tasks | V1 |
+| `steer.learn` | Extract learnings, update knowledge | V1 |
+| `steer.commit` | Smart commit message | Phase 2 |
+| `steer.pr` | PR description generator | Phase 2 |
+| `steer.knowledge` | Search/view/prune knowledge | Phase 2 |
+
+## Prompt Assembly Pipeline
+
+```
+RULES.md               → Team constraints (always loaded, cached)
+knowledge/{module}.md   → Compounding context (loaded for affected modules)
+codebase-map.json       → Architecture, patterns, conventions
+history.jsonl           → Similar past tasks, failed approaches
+templates/{mode}.md     → Mode-specific structure
+External sources        → Jira, Sentry, GitHub, Slack, Figma (Phase 2)
+Developer input         → Task description + follow-up answers
+Constraints             → File limits, model tier, hook flags
+Output format           → Expected shape (diff, plan, etc.)
+Verification            → Acceptance criteria + tests to run
+```
 
 ## Data Flow
 
-**Gate Flow (Central Pipeline):**
+```
+Developer: "Fix the login bug"
+    │
+    ▼
+Agent calls steer.start({mode: "bugfix"})
+    │
+    ▼
+MCP: load codemap + knowledge + git context + similar tasks
+    │
+    ▼
+MCP returns: intelligent questions + pre-loaded context
+    │
+    ▼
+Developer answers (fewer needed because system already knows)
+    │
+    ▼
+Agent calls steer.plan() → plan + impact preview → approval
+    │
+    ▼
+Agent calls steer.execute() → [agent does the work]
+    │
+    ▼
+MCP: reflection loop (self-review, max 2 rounds)
+    │
+    ▼
+Agent calls steer.verify() → checklist results
+    │
+    ▼
+Agent calls steer.learn() → extract learnings → update knowledge/
+    │
+    ▼
+Agent calls steer.commit() + steer.pr() → output generation
+    │
+    ▼
+Logged to history.jsonl. Knowledge files updated. Done.
+```
 
-1. User provides `draftPrompt` + `mode`
-2. `scorePrompt()` analyzes prompt structure → `ScoreResult`
-3. `generateFollowUps()` creates clarifying questions → `FollowUp[]`
-4. `deriveStatus()` maps score to `BLOCKED | NEEDS_INFO | READY`
-5. `buildPrompt()` restructures prompt with GOAL/CONTEXT/LIMITS/OUTPUT FORMAT/REVIEW
-6. `routeModel()` suggests model tier based on mode + score
-7. `estimateTokens()` calculates cost estimate
-8. Return unified `GateResult`
+## Package Dependencies
 
-**State Management:**
-- **Extension:** `SessionState` class with VS Code Memento persistence
-- **CLI:** Stateless per-invocation, interactive loop rebuilds state
-- **Telemetry:** Append-only JSONL file at `./data/telemetry.jsonl`
+```
+packages/core/          → Zero deps. Pure TS functions.
+packages/mcp-server/    → Depends on core. MCP SDK + Zod.
+packages/cli/           → Depends on core.
+packages/cursor-extension/ → Depends on core. VS Code API.
+```
 
 ## Key Abstractions
 
-**Mode:**
-- Purpose: Task context that affects scoring and routing
-- Definition: `packages/core/src/types.ts`
-- Values: `"chat" | "code" | "review" | "plan" | "design" | "bugfix" | "debug"`
-- Used by: `scorePrompt()`, `generateFollowUps()`, `routeModel()`
+| Type | Description |
+|------|-------------|
+| `TaskState` | Full workflow state (8 steps, timing, context, plan) |
+| `CodemapNode` | Module/file with dependencies, tests, risk level |
+| `Learning` | Extracted insight (pattern, gotcha, convention, failed_approach) |
+| `ImpactPreview` | Files modified, downstream deps, tests to run, risk |
 
-**ScoreResult:**
-- Purpose: Analysis output from prompt scoring
-- Definition: `packages/core/src/types.ts`
-- Fields: `score` (0-10), `missing` (section names), `vagueFlags` (verb occurrences), `fileRefs` (@refs)
-- Produced by: `scorePrompt()`
-- Consumed by: `generateFollowUps()`, `buildPrompt()`
+## Intelligence Layers (Incremental)
 
-**GateResult:**
-- Purpose: Complete evaluation result for a prompt
-- Definition: `packages/*/src/gate*.ts` (duplicated)
-- Fields: `status`, `score`, `missing`, `followupQuestions`, `patchedPrompt`, `modelSuggestion`, `costEstimate`
-- Produced by: `gate()` / `callGate()`
-
-**GateStatus:**
-- Purpose: Traffic-light classification for prompt readiness
-- Values: `"BLOCKED"` (score ≤ 3), `"NEEDS_INFO"` (score 4-6), `"READY"` (score ≥ 7)
-
-## Entry Points
-
-**CLI (`packages/cli/src/index.ts`):**
-- Location: `packages/cli/src/index.ts`
-- Triggers: `npx steer-agent-tool <command>`
-- Commands: `steer` (interactive), `init` (setup), `mcp` (server), `metrics` (telemetry)
-- Responsibilities: Parse args, delegate to command handlers
-
-**MCP Server (`packages/mcp-server/src/index.ts`):**
-- Location: `packages/mcp-server/src/index.ts`
-- Triggers: stdio transport from Claude Desktop or CLI
-- Responsibilities: Register `steer.gate` tool, handle JSON-RPC calls
-
-**Cursor Extension (`packages/cursor-extension/src/extension.ts`):**
-- Location: `packages/cursor-extension/src/extension.ts`
-- Triggers: VS Code activation (`onStartupFinished`)
-- Responsibilities: Register commands, chat participant, webview panels
-
-## Error Handling
-
-**Strategy:** Defensive with graceful fallbacks
-
-**Patterns:**
-- Score clamped to 0-10 range: `Math.max(0, Math.min(10, score))`
-- Telemetry failures are swallowed: `.catch(() => {})`
-- Missing mode defaults to `"code"`
-- Clipboard copy failure shows manual alternative
-- Patched prompt only generated if score ≥ 4
-
-## Cross-Cutting Concerns
-
-**Logging:** Console-based, minimal (extension logs activation)
-
-**Validation:** Pattern-based prompt analysis (regex for sections, vague verbs, @refs)
-
-**Authentication:** None (local-only tool)
-
-**Telemetry:** Opt-in append-only JSONL with `applyToChat` events tracking task/score/model
+| Phase | Approach | Precision |
+|-------|----------|-----------|
+| V1 | Static analysis (regex imports, file tree, git log) | Good |
+| Phase 2 | Tree-sitter AST + RAG embeddings | Better |
+| Phase 3+ | LSP integration | Best |
 
 ---
-
-*Architecture analysis: 2026-02-24*
+*Canonical spec: `.planning/SPEC-V3.md` | Last updated: 2026-02-28*

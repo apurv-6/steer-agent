@@ -1,21 +1,35 @@
-import * as path from "node:path";
 import { z } from "zod";
-import { workflow } from "@steer-agent-tool/core";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { steerDirExists } from "@steer-agent-tool/core";
 
-const { resumeTask } = workflow;
-
-export const ResumeParamsSchema = {
-  repoPath: z.string().describe("Absolute path to the repository root"),
+export const ResumeSchema = {
+  cwd: z.string().optional().describe("Root directory (defaults to cwd)"),
 };
 
-export async function handleResume(args: { repoPath: string }) {
+export async function handleResume(args: { cwd?: string }) {
   try {
-    const steerDir = path.join(args.repoPath, ".steer");
-    const result = resumeTask(steerDir);
+    const cwd = args.cwd || process.cwd();
 
-    if (!result.state) {
+    if (!steerDirExists(cwd)) {
       return {
-        content: [{ type: "text" as const, text: JSON.stringify({ status: "no_task", message: result.message }) }],
+        content: [{ type: "text" as const, text: "SteerAgent is not initialized in this project.\n\nRun:\n  steer-agent init\n\nOr with npx:\n  npx @coinswitch/steer-agent init" }],
+      };
+    }
+
+    const statePath = join(cwd, ".steer", "state", "current-task.json");
+
+    if (!existsSync(statePath)) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ status: "no_task", message: "No interrupted task found." }) }],
+      };
+    }
+
+    const state = JSON.parse(readFileSync(statePath, "utf-8"));
+
+    if (state.currentStep === "done") {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ status: "completed", message: "Last task is already completed.", taskId: state.taskId }) }],
       };
     }
 
@@ -23,23 +37,19 @@ export async function handleResume(args: { repoPath: string }) {
       content: [{
         type: "text" as const,
         text: JSON.stringify({
-          step: result.resumeStep,
-          status: "resumed",
-          taskId: result.state.taskId,
-          mode: result.state.mode,
-          round: result.state.round,
-          currentStep: result.state.currentStep,
-          files: result.state.files,
-          message: result.message,
-          stateUpdated: true,
+          status: "resumable",
+          taskId: state.taskId,
+          mode: state.mode,
+          currentStep: state.currentStep,
+          round: state.round,
+          files: state.files,
+          goal: state.goal,
+          message: `Resuming task ${state.taskId} from step: ${state.currentStep}`,
         }, null, 2),
       }],
     };
-  } catch (err) {
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }],
-      isError: true,
-    };
+    return { content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }], isError: true };
   }
 }

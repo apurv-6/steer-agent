@@ -24,16 +24,17 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { gate } from "./gate.js";
 import { VERSION } from "@steer-agent-tool/core";
-
-// v2: Workflow tool handlers
-import { InitParamsSchema, handleInit } from "./tools/init.js";
-import { StartParamsSchema, handleStart } from "./tools/start.js";
-import { PlanParamsSchema, handlePlan } from "./tools/plan.js";
-import { ExecuteParamsSchema, handleExecute } from "./tools/execute.js";
-import { VerifyParamsSchema, handleVerify } from "./tools/verify.js";
-import { StatusParamsSchema, handleStatus } from "./tools/status.js";
-import { MapParamsSchema, handleMap } from "./tools/map.js";
-import { ResumeParamsSchema, handleResume } from "./tools/resume.js";
+import { InitSchema, handleInit } from "./tools/init.js";
+import { StartSchema, handleStart } from "./tools/start.js";
+import { PlanSchema, handlePlan } from "./tools/plan.js";
+import { ExecuteSchema, handleExecute } from "./tools/execute.js";
+import { VerifySchema, handleVerify } from "./tools/verify.js";
+import { StatusSchema, handleStatus } from "./tools/status.js";
+import { MapSchema, handleMap } from "./tools/map.js";
+import { ImpactSchema, handleImpact } from "./tools/impact.js";
+import { ResumeSchema, handleResume } from "./tools/resume.js";
+import { SimilarSchema, handleSimilar } from "./tools/similar.js";
+import { LearnSchema, handleLearn } from "./tools/learn.js";
 
 const server = new McpServer({
   name: "steer-agent-tool",
@@ -93,70 +94,92 @@ server.tool(
   handleGate,
 );
 
-// === v2: Workflow tools ===
-
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.init",
-  "Initialize SteerAgent in a repository. Creates .steer/ folder with config, templates, hooks, and builds a codebase map.",
-  InitParamsSchema,
+  "Initialize SteerAgent in the current directory. Creates .steer/ folder and config.",
+  InitSchema,
   handleInit,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.start",
-  "Start a new task. Loads template for mode, gathers codebase context, and generates intelligent follow-up questions.",
-  StartParamsSchema,
+  "Start a new task with intelligent context gathering.",
+  StartSchema,
   handleStart,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.plan",
-  "Propose an execution plan with impact preview. Assembles the structured prompt from answers and context. Requires approval before execution.",
-  PlanParamsSchema,
+  "Create an execution plan with impact preview for a task.",
+  PlanSchema,
   handlePlan,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.execute",
-  "Manage execution phase. Use action='approve' to start execution, action='complete' to mark it done and move to verification.",
-  ExecuteParamsSchema,
+  "Begin execution of an approved plan. Tracks scope enforcement.",
+  ExecuteSchema,
   handleExecute,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.verify",
-  "Verify task completion. If passed=true, task is complete and logged to history. If passed=false, starts a new round.",
-  VerifyParamsSchema,
+  "Run verification checklist against acceptance criteria.",
+  VerifySchema,
   handleVerify,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.status",
-  "Show current task progress — step tracker with timing, model tier, sources used, and impact level.",
-  StatusParamsSchema,
+  "Get current task progress: step, timing, files, sources.",
+  StatusSchema,
   handleStatus,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
 server.tool(
   "steer.map",
-  "Rebuild the codebase map. Scans file tree, parses imports, matches tests, analyzes git change coupling and ownership.",
-  MapParamsSchema,
+  "Rebuild or query the codebase map.",
+  MapSchema,
   handleMap,
 );
 
-// @ts-ignore - TS2589
+// @ts-ignore
+server.tool(
+  "steer.impact",
+  "Preview change impact for a set of files (downstream deps, tests, risk).",
+  ImpactSchema,
+  handleImpact,
+);
+
+// @ts-ignore
 server.tool(
   "steer.resume",
-  "Resume an interrupted or suspended task from where it left off.",
-  ResumeParamsSchema,
+  "Resume an interrupted task from saved state.",
+  ResumeSchema,
   handleResume,
+);
+
+// @ts-ignore
+server.tool(
+  "steer.similar",
+  "Find similar past tasks from history.",
+  SimilarSchema,
+  handleSimilar,
+);
+
+// @ts-ignore
+server.tool(
+  "steer.learn",
+  "Extract learnings from a completed task and update knowledge files.",
+  LearnSchema,
+  handleLearn,
 );
 
 export async function startServer(): Promise<void> {

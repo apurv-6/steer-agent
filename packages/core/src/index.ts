@@ -1,15 +1,6 @@
-export const VERSION = "0.3.0";
+export const VERSION = "0.2.0";
 
-export interface SteerCoreConfig {
-  name: string;
-  version: string;
-}
-
-export function createConfig(name: string): SteerCoreConfig {
-  return { name, version: VERSION };
-}
-
-// Types (v1)
+// Types
 export type {
   Mode,
   GateMode,
@@ -22,10 +13,28 @@ export type {
   GateResult,
   GateInput,
   TelemetryEvent,
+  CodebaseMap,
+  ModuleInfo,
+  FileInfo,
+  DependencyGraph,
+  ChangeCoupling,
+  // V3.0 types
+  HookDefinition,
+  HooksConfig,
+  HookResult,
+  LearningEntry,
+  LearningCategory,
+  KnowledgeEntry,
+  PlanStep,
+  ImpactPreview,
+  VerificationResult,
+  VerificationCheck,
+  SimilarTask,
+  SteerConfig,
 } from "./types.js";
 export { MODE_MAP } from "./types.js";
 
-// Core functions (v1)
+// Core functions
 export { scorePrompt } from "./scorePrompt.js";
 export { extractFileRefs } from "./extractFileRefs.js";
 export { generateFollowUps } from "./generateFollowUps.js";
@@ -41,5 +50,37 @@ export { gate } from "./gate.js";
 // Telemetry
 export * as telemetry from "./telemetry.js";
 
-// ── v2: Workflow Engine ────────────────────────────────────────────
-export * as workflow from "./workflow/index.js";
+// Codebase map
+export { buildCodebaseMap } from "./codemap-static.js";
+
+// State machine
+export { createNewTask, transitionStep, computeDuration, INITIAL_STATE } from "./state.js";
+export type { TaskState, StepName, StepStatus } from "./state.js";
+
+// Init & Start
+export { initSteer } from "./init.js";
+export { startTask } from "./start.js";
+export type { StartOptions } from "./start.js";
+
+// V3.0 Core Modules
+export { loadHooks, runHooks, parseHooksYaml } from "./hookRunner.js";
+export { loadModuleKnowledge, loadGlobalKnowledge, loadRules } from "./knowledgeLoader.js";
+export { assemblePrompt, loadTemplate, parseFrontmatter } from "./promptAssembler.js";
+export type { AssemblyContext } from "./promptAssembler.js";
+export { findSimilarTasks } from "./similarTasks.js";
+export { buildPlan, computeImpact } from "./planBuilder.js";
+export type { PlanContext } from "./planBuilder.js";
+export { runVerification } from "./verifier.js";
+export { runReflection } from "./reflection.js";
+export type { ReflectionResult } from "./reflection.js";
+export { extractLearnings, persistLearnings, updateKnowledgeFile } from "./learner.js";
+export { shouldSpawnSubAgents } from "./subagent.js";
+export type { SubAgentDecision, SubAgentAssignment } from "./subagent.js";
+export { generateCommitMessage } from "./commit-gen.js";
+export { generatePRDescription } from "./pr-gen.js";
+export { completeTask } from "./completion.js";
+export type { HistoryEntry } from "./completion.js";
+export { logSteer, logToolCall } from "./logger.js";
+
+// Path resolution
+export { findSteerDir, steerDirExists } from "./paths.js";
