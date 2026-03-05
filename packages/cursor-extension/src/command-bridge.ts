@@ -12,11 +12,14 @@ export function registerBridgeCommands(context: vscode.ExtensionContext): void {
   const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("steeragent.startTask", async () => {
-      const goal = await vscode.window.showInputBox({
-        prompt: "Task goal",
-        placeHolder: "What are you working on?",
-      });
+    vscode.commands.registerCommand("steeragent.startTask", async (prefillGoal?: string) => {
+      let goal = prefillGoal?.trim();
+      if (!goal) {
+        goal = await vscode.window.showInputBox({
+          prompt: "Task goal",
+          placeHolder: "What are you working on?",
+        });
+      }
       if (!goal) return;
 
       const modes = ["bugfix", "feature", "refactor", "debug", "design"];

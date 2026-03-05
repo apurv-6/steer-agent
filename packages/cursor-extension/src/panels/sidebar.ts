@@ -73,6 +73,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this.refresh();
       } else if (msg.type === "command") {
         vscode.commands.executeCommand(msg.command);
+      } else if (msg.type === "startTask") {
+        vscode.commands.executeCommand("steeragent.startTask", msg.goal);
       } else if (msg.type === "expandModule") {
         if (this._expandedModules.has(msg.module)) {
           this._expandedModules.delete(msg.module);
@@ -342,6 +344,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const vscode = acquireVsCodeApi();
     function switchTab(tab) { vscode.postMessage({ type: 'switchTab', tab }); }
     function runCommand(cmd) { vscode.postMessage({ type: 'command', command: cmd }); }
+    function startTaskFromInput() {
+      const input = document.getElementById('task-input');
+      const goal = input ? input.value.trim() : '';
+      vscode.postMessage({ type: 'startTask', goal });
+    }
   </script>
 </body>
 </html>`;
@@ -397,7 +404,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const raw = fs.readFileSync(historyPath, "utf-8");
       const records = raw.trim().split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
       if (records.length === 0) return "—";
-      const passed = records.filter((r: any) => r.firstPassComplete === true || r.resolution === "passed");
+      const passed = records.filter((r: any) => r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed");
       return ((passed.length / records.length) * 100).toFixed(1);
     } catch {
       return "—";
@@ -484,7 +491,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const effectiveStep = (t.currentStep === "idle" || !t.currentStep) ? "context" : t.currentStep;
     const currentIdx = Math.max(0, steps.indexOf(effectiveStep));
     const sessionData = this._sessionState?.data;
-    const modelTier = t.modelTier || sessionData?.lastModelTier || null;
+    const rawTier = t.modelTier || t.model || sessionData?.lastModelTier;
+    const modelTier = this.normalizeTier(rawTier);
 
     // Elapsed time
     const startedAt = t.steps?.[t.currentStep]?.startedAt;
@@ -552,14 +560,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     </div>`;
 
     // ─── Sub-Agents ───
-    const subAgents = t.subAgents || [];
+    // MCP writes subAgentDecision: { shouldSplit, reason, agents: [{id, files, description}] }
+    const subAgentDecision = t.subAgentDecision as { shouldSplit?: boolean; agents?: Array<{ id: string; files: string[]; description: string }> } | undefined;
+    const subAgents = subAgentDecision?.shouldSplit ? (subAgentDecision.agents || []) : [];
     const subAgentSection = `<div class="card">
       <div class="section-title" style="margin-bottom:6px">Sub-Agents (Parallel)</div>
       <div style="display:flex;flex-direction:column;gap:4px">
         ${subAgents.length > 0 ? subAgents.map((a: any) => `<div style="display:flex;align-items:center;gap:6px">
-          <div style="width:6px;height:6px;border-radius:50%;background:${a.status === "running" ? C.green : C.textDim};animation:${a.status === "running" ? "pulse 2s infinite" : "none"}"></div>
-          <span style="font-size:10px;color:${C.text};flex:1">${this.esc(a.name || "Agent")}</span>
-          <span style="font-size:9px;color:${a.status === "running" ? C.green : C.textDim}">${a.status || "idle"}</span>
+          <div style="width:6px;height:6px;border-radius:50%;background:${C.green};animation:pulse 2s infinite"></div>
+          <span style="font-size:10px;color:${C.text};flex:1">${this.esc(a.description || a.id || "Agent")}</span>
+          <span style="font-size:9px;color:${C.textDim}">${a.files?.length ?? 0} files</span>
         </div>`).join("") : `<div style="font-size:10px;color:${C.textDim}">No sub-agents active</div>`}
       </div>
     </div>`;
@@ -567,16 +577,26 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // ─── Task Input ───
     const taskInput = `<div style="padding:8px 10px;border-radius:8px;background:${C.bgAlt};border:1px solid ${C.border};margin-top:auto">
       <div style="display:flex;gap:6px">
-        <input placeholder="Describe task or paste Jira ID..."
-          style="flex:1;padding:6px 8px;border-radius:4px;background:${C.surface};border:1px solid ${C.border};color:${C.text};font-size:11px;outline:none;font-family:inherit" readonly />
+        <input id="task-input" placeholder="Describe task or paste Jira ID..."
+          style="flex:1;padding:6px 8px;border-radius:4px;background:${C.surface};border:1px solid ${C.border};color:${C.text};font-size:11px;outline:none;font-family:inherit" />
         <button onclick="runCommand('steeragent.newTask')" title="Reset to a fresh task" style="padding:6px 8px;border-radius:4px;background:${C.surface};border:1px solid ${C.border};color:${C.textDim};font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">↺</button>
-        <button onclick="runCommand('steeragent.startTask')" style="padding:6px 10px;border-radius:4px;background:${C.accent};border:none;color:${C.bgAlt};font-size:10px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit">
+        <button onclick="startTaskFromInput()" style="padding:6px 10px;border-radius:4px;background:${C.accent};border:none;color:${C.bgAlt};font-size:10px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit">
           ${ICONS.play} STEER
         </button>
       </div>
     </div>`;
 
     return [header, clearSection, workflow, subAgentSection, taskInput].filter(Boolean).join("");
+  }
+
+  private normalizeTier(v: string | undefined | null): string | null {
+    if (!v) return null;
+    const l = v.toLowerCase();
+    if (l === "small" || l === "mid" || l === "high") return l;
+    if (l.includes("haiku")) return "small";
+    if (l.includes("sonnet")) return "mid";
+    if (l.includes("opus")) return "high";
+    return null;
   }
 
   private stepLabel(step: string): string {
@@ -743,9 +763,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     const totalTasks = records.length;
-    const fpcrTasks = records.filter((r: any) => r.firstPassComplete === true || r.resolution === "passed");
+    const fpcrTasks = records.filter((r: any) => r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed");
     const fpcr = totalTasks > 0 ? ((fpcrTasks.length / totalTasks) * 100).toFixed(1) : "—";
-    const avgRounds = totalTasks > 0 ? (records.reduce((s: number, r: any) => s + (r.rounds ?? r.round ?? 1), 0) / totalTasks).toFixed(1) : "—";
+    const avgRounds = totalTasks > 0 ? (records.reduce((s: number, r: any) => s + ((r.rounds ?? r.round ?? 0) + 1), 0) / totalTasks).toFixed(1) : "—";
 
     let kFiles = 0;
     try {
@@ -772,12 +792,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // Bar chart (last 20)
     if (records.length > 0) {
       const last20 = records.slice(-20);
-      const getRounds = (r: any) => r.rounds ?? r.round ?? 1;
+      const getRounds = (r: any) => (r.rounds ?? r.round ?? 0) + 1;
       const maxRound = Math.max(...last20.map((r: any) => getRounds(r)), 1);
 
       const bars = last20.map((r: any) => {
         const h = Math.max(10, (getRounds(r) / maxRound) * 100);
-        const passed = r.firstPassComplete === true || r.resolution === "passed";
+        const passed = r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed";
         const color = passed ? C.green : C.red;
         const result = passed ? "pass" : "fail";
         return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
