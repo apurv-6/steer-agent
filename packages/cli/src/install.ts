@@ -9,14 +9,14 @@ const __dirname = path.dirname(__filename);
 
 interface InstallArgs {
   force?: boolean;
-  skipExtension?: boolean;
+  noExt?: boolean;
 }
 
 function parseArgs(argv: string[]): InstallArgs {
   const args: InstallArgs = {};
   for (const arg of argv) {
     if (arg === "--force" || arg === "-f") args.force = true;
-    if (arg === "--skip-extension") args.skipExtension = true;
+    if (arg === "--no-ext" || arg === "--no-extension") args.noExt = true;
   }
   return args;
 }
@@ -33,8 +33,11 @@ function loadOrCreateSettings(settingsPath: string): Record<string, unknown> {
 }
 
 function resolveSkillsDir(): string {
-  // When running from dist/, skills are at repo root .claude/skills/
-  // Walk up from __dirname to find .claude/skills/
+  // 1. Package-local skills/ (present after prepack / in published npm package)
+  const pkgLocal = path.join(__dirname, "..", "skills");
+  if (fs.existsSync(pkgLocal)) return pkgLocal;
+
+  // 2. Walk up from __dirname to find .claude/skills/ (monorepo / npm link)
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
     const candidate = path.join(dir, ".claude", "skills");
@@ -43,15 +46,44 @@ function resolveSkillsDir(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  throw new Error("Could not locate .claude/skills/ directory relative to the steer-agent package.");
+  throw new Error("Could not locate skills directory. Run: steer-agent install after npm install -g.");
+}
+
+function findVsixPath(): string | null {
+  // 1. Package-local extension/ dir (after prepack copy)
+  const localExt = path.join(__dirname, "..", "extension");
+  if (fs.existsSync(localExt)) {
+    const files = fs.readdirSync(localExt).filter((f) => f.endsWith(".vsix"));
+    if (files.length > 0) {
+      files.sort().reverse(); // newest version first
+      return path.join(localExt, files[0]);
+    }
+  }
+  // 2. Walk up to find packages/cursor-extension/ (monorepo / npm link)
+  let dir = __dirname;
+  for (let i = 0; i < 8; i++) {
+    for (const sub of ["packages/cursor-extension", "cursor-extension"]) {
+      const candidate = path.join(dir, sub);
+      if (fs.existsSync(candidate)) {
+        const files = fs.readdirSync(candidate).filter((f) => f.endsWith(".vsix"));
+        if (files.length > 0) {
+          files.sort().reverse();
+          return path.join(candidate, files[0]);
+        }
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 
 function findSteerMcpBin(): string {
-  // Find the steer-mcp binary in PATH
-  try {
-    const result = execSync("which steer-mcp 2>/dev/null || true", { encoding: "utf8" }).trim();
-    if (result) return result;
-  } catch {}
+  // Prefer absolute path from our own dist/ (works without PATH lookup)
+  const local = path.join(__dirname, "mcp-entry.js");
+  if (fs.existsSync(local)) return local;
+  // Fall back to command name (works when steer-mcp is in PATH)
   return "steer-mcp";
 }
 
@@ -76,11 +108,11 @@ export async function runInstall(argv: string[]): Promise<void> {
 
   if (!mcpServers["steer-agent"] || args.force) {
     const steerMcpBin = findSteerMcpBin();
-    mcpServers["steer-agent"] = {
-      command: steerMcpBin,
-      args: [],
-      env: {},
-    };
+    // Use absolute path via `node <path>` when we found the bin locally
+    const isAbsolute = path.isAbsolute(steerMcpBin);
+    mcpServers["steer-agent"] = isAbsolute
+      ? { command: "node", args: [steerMcpBin], env: {} }
+      : { command: steerMcpBin, args: [], env: {} };
     changed = true;
     console.log("  ├── Registering in ~/.claude/settings.json");
     console.log("  └── ✅ steer-agent MCP server registered");
@@ -142,6 +174,12 @@ export async function runInstall(argv: string[]): Promise<void> {
     (h) => typeof h.command === "string" && h.command.includes("steer-hook-prompt")
   );
 
+  // Prefer absolute path for the hook binary to survive PATH changes
+  const hookAbsPath = path.join(__dirname, "hooks", "prompt-submit.js");
+  const hookCmd = fs.existsSync(hookAbsPath)
+    ? `node ${hookAbsPath}`
+    : "steer-hook-prompt";
+
   if (!hasSteerHook || args.force) {
     if (args.force) {
       const filtered = userHooks.filter(
@@ -150,13 +188,13 @@ export async function runInstall(argv: string[]): Promise<void> {
       hooks.UserPromptSubmit = filtered;
       (hooks.UserPromptSubmit as Array<unknown>).push({
         type: "command",
-        command: "steer-hook-prompt",
+        command: hookCmd,
         timeout: 5000,
       });
     } else {
       userHooks.push({
         type: "command",
-        command: "steer-hook-prompt",
+        command: hookCmd,
         timeout: 5000,
       });
     }
@@ -172,21 +210,14 @@ export async function runInstall(argv: string[]): Promise<void> {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   }
 
-  // 4. VS Code / Cursor extension (optional, non-blocking)
-  if (!args.skipExtension) {
-    console.log("\n  VS Code / Cursor Extension");
-    const vsixDir = path.join(__dirname, "..", "..", "extension");
-    let vsixPath: string | undefined;
-    if (fs.existsSync(vsixDir)) {
-      const vsixFiles = fs.readdirSync(vsixDir).filter((f) => f.endsWith(".vsix"));
-      if (vsixFiles.length > 0) {
-        vsixPath = path.join(vsixDir, vsixFiles[0]);
-      }
-    }
+  // 4. VS Code / Cursor extension (installed by default, skip with --no-ext)
+  console.log("\n  VS Code / Cursor Extension");
+  if (!args.noExt) {
+    const vsixPath = findVsixPath();
 
     if (vsixPath) {
       let installed = false;
-      for (const editor of ["code", "cursor"]) {
+      for (const editor of ["cursor", "code"]) {
         try {
           execSync(`${editor} --install-extension "${vsixPath}" 2>/dev/null`, { stdio: "pipe" });
           console.log(`  └── ✅ Extension installed via ${editor}`);
@@ -195,11 +226,17 @@ export async function runInstall(argv: string[]): Promise<void> {
         } catch {}
       }
       if (!installed) {
-        console.log(`  └── ⚠️  Manual install: Extensions → Install from VSIX → ${vsixPath}`);
+        console.log(`  └── ⚠️  Automatic install failed. Manual steps:`);
+        console.log(`       1. Open Cursor / VS Code`);
+        console.log(`       2. Cmd+Shift+P → "Extensions: Install from VSIX"`);
+        console.log(`       3. Select: ${vsixPath}`);
       }
     } else {
-      console.log("  └── ⏭  No .vsix found (skip)");
+      console.log("  └── ⚠️  No .vsix file found in package.");
+      console.log("       Build it first: cd packages/cursor-extension && npm run package");
     }
+  } else {
+    console.log("  └── ⏭  Skipped (--no-ext)");
   }
 
   console.log("\n═══════════════════════════════════════");
