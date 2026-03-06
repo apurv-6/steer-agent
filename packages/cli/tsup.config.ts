@@ -2,11 +2,12 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: ["src/index.ts", "src/mcp-entry.ts", "src/hooks/prompt-submit.ts"],
-  // CJS is the right format for a Node.js CLI: all transitive CJS deps
-  // (fs-extra, graceful-fs, yaml, glob, etc.) work correctly without shims.
-  format: ["cjs"],
+  format: ["esm"],
   platform: "node",
-  shims: true,    // polyfills import.meta.url, __dirname, __filename in CJS output
+  // fs-extra and graceful-fs are CJS-only. Marking them external lets Node.js
+  // handle CJS→ESM interop natively instead of tsup bundling them (which breaks
+  // dynamic require). Top-level await also requires ESM output.
+  external: ["fs-extra", "graceful-fs"],
   clean: true,
   sourcemap: true,
   banner: { js: "#!/usr/bin/env node" },
