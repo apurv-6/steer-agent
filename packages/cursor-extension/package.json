@@ -4,6 +4,11 @@
   "displayName": "Steer Agent Tool",
   "description": "Cursor extension for steer-agent-tool",
   "publisher": "steer-agent-tool",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/apurv-6/steer-agent.git",
+    "directory": "packages/cursor-extension"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -89,7 +94,7 @@
   "scripts": {
     "build": "node esbuild.js",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository"
   },
   "dependencies": {
     "@steer-agent-tool/core": "*"

@@ -158,7 +158,7 @@ fi
 info "Building and packaging Cursor extension..."
 if ! npm run build --workspace=packages/cursor-extension 2>&1; then
   warn "Extension build failed (non-fatal — continuing without sidebar)"
-elif ! (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && npx vsce package --no-dependencies 2>&1); then
+elif ! (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && npx vsce package --no-dependencies --allow-missing-repository 2>&1); then
   warn "Extension packaging failed (non-fatal — continuing without sidebar)"
 else
   ok "Extension packaged"
