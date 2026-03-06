@@ -162,7 +162,7 @@ else
   # Package the extension — vsce prompts interactively for missing fields,
   # so we pipe "yes" and use --allow-missing-repository to handle all cases
   VSIX_BUILT=0
-  if (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && yes | npx vsce package --no-dependencies --allow-missing-repository 2>&1); then
+  if (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && yes | npx @vscode/vsce@latest package --no-dependencies --allow-missing-repository 2>&1); then
     VSIX_BUILT=1
     ok "Extension packaged"
   else
