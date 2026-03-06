@@ -204,13 +204,20 @@ done
 
 if [[ -n "$VSIX_FILE" ]]; then
   EXT_INSTALLED=0
-  for editor in cursor code; do
-    if command -v "$editor" &>/dev/null; then
+  # Try CLI commands first, then macOS app bundle paths as fallback
+  EDITOR_CANDIDATES=(
+    cursor
+    code
+    "/Applications/Cursor.app/Contents/Resources/app/bin/cursor"
+    "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+  )
+  for editor in "${EDITOR_CANDIDATES[@]}"; do
+    if command -v "$editor" &>/dev/null || [[ -x "$editor" ]]; then
       if "$editor" --uninstall-extension steer-agent-tool.steer-agent-tool-extension 2>/dev/null; then
-        ok "Removed old extension from ${editor}"
+        ok "Removed old extension from ${editor##*/}"
       fi
       if "$editor" --install-extension "$VSIX_FILE" 2>/dev/null; then
-        ok "Extension installed via ${editor}"
+        ok "Extension installed via ${editor##*/}"
         EXT_INSTALLED=1
         break
       fi

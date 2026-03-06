@@ -233,10 +233,18 @@ export async function runInstall(argv: string[]): Promise<void> {
 
     if (vsixPath) {
       let installed = false;
-      for (const editor of ["cursor", "code"]) {
+      // Try CLI commands first, then macOS app bundle paths as fallback
+      const editorCandidates = [
+        "cursor",
+        "code",
+        "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+      ];
+      for (const editor of editorCandidates) {
         try {
-          execSync(`${editor} --install-extension "${vsixPath}" 2>/dev/null`, { stdio: "pipe" });
-          console.log(`  └── ✅ Extension installed via ${editor}`);
+          execSync(`"${editor}" --install-extension "${vsixPath}" 2>/dev/null`, { stdio: "pipe" });
+          const name = editor.includes("cursor") || editor.includes("Cursor") ? "cursor" : "code";
+          console.log(`  └── ✅ Extension installed via ${name}`);
           installed = true;
           break;
         } catch {}

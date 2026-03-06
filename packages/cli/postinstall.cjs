@@ -174,10 +174,18 @@ function main() {
     const vsixPath = findVsixPath();
     if (vsixPath) {
       let installed = false;
-      for (const editor of ['cursor', 'code']) {
+      // Try CLI commands first, then macOS app bundle paths as fallback
+      const editorCandidates = [
+        'cursor',
+        'code',
+        '/Applications/Cursor.app/Contents/Resources/app/bin/cursor',
+        '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      ];
+      for (const editor of editorCandidates) {
         try {
-          execSync(editor + ' --install-extension "' + vsixPath + '" 2>/dev/null', { stdio: 'pipe' });
-          log('✅ Extension installed via ' + editor);
+          execSync('"' + editor + '" --install-extension "' + vsixPath + '" 2>/dev/null', { stdio: 'pipe' });
+          const name = editor.includes('cursor') || editor.includes('Cursor') ? 'cursor' : 'code';
+          log('✅ Extension installed via ' + name);
           installed = true;
           break;
         } catch {}
