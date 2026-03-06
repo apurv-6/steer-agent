@@ -130,23 +130,43 @@ if [[ "$INSTALL_EXT" -eq 1 ]]; then
   fi
 fi
 
-# ── 7. Verify installation ────────────────────────────────────────────────────
+# ── 7. Create stable symlinks so steer-agent works across nvm versions ───────
 echo ""
 NPM_BIN="$(npm prefix -g)/bin"
 STEER_BIN="${NPM_BIN}/steer-agent"
+STABLE_DIRS=("/usr/local/bin" "${HOME}/.local/bin")
 
+if [[ -f "$STEER_BIN" ]]; then
+  for dir in "${STABLE_DIRS[@]}"; do
+    if [[ -d "$dir" ]] && [[ -w "$dir" ]]; then
+      for cmd in steer-agent steer-mcp steer-hook-prompt; do
+        src="${NPM_BIN}/${cmd}"
+        dst="${dir}/${cmd}"
+        [[ -f "$src" ]] && ln -sf "$src" "$dst" 2>/dev/null && true
+      done
+      ok "Symlinks created in ${dir} (works across nvm versions)"
+      break
+    elif [[ -d "$dir" ]]; then
+      # Need sudo
+      for cmd in steer-agent steer-mcp steer-hook-prompt; do
+        src="${NPM_BIN}/${cmd}"
+        [[ -f "$src" ]] && sudo ln -sf "$src" "${dir}/${cmd}" 2>/dev/null && true
+      done
+      ok "Symlinks created in ${dir} (via sudo, works across nvm versions)"
+      break
+    fi
+  done
+fi
+
+# ── 8. Verify installation ────────────────────────────────────────────────────
+echo ""
 if command -v steer-agent &>/dev/null; then
   VERSION="$(steer-agent --version 2>/dev/null || echo 'unknown')"
   ok "steer-agent ${VERSION} is ready"
 elif [[ -f "$STEER_BIN" ]]; then
   ok "steer-agent installed at: ${STEER_BIN}"
-  warn "Not in PATH. Add this to your ~/.zshrc or ~/.bashrc and restart your shell:"
+  warn "Not in PATH. Add this to your shell profile and restart:"
   warn "  export PATH=\"${NPM_BIN}:\$PATH\""
-  if [[ -n "${NVM_DIR:-}" ]]; then
-    warn ""
-    warn "  (nvm detected) You may also need: nvm use $(node -v | tr -d v)"
-    warn "  or add steer-agent to your default nvm version."
-  fi
 else
   warn "steer-agent not found after install."
   warn "Add npm global bin to PATH and restart your shell:"
