@@ -93,8 +93,13 @@ if ! npm run build --workspace=packages/mcp-server 2>&1; then
   die "Build failed: packages/mcp-server"
 fi
 
+info "Building and packaging Cursor extension..."
 if ! npm run build --workspace=packages/cursor-extension 2>&1; then
   warn "Extension build failed (non-fatal — continuing without sidebar)"
+elif ! (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && npx vsce package --no-dependencies 2>&1); then
+  warn "Extension packaging failed (non-fatal — continuing without sidebar)"
+else
+  ok "Extension packaged"
 fi
 
 if ! npm run build --workspace=packages/cli 2>&1; then
@@ -118,16 +123,14 @@ else
 fi
 
 
-# ── 6. VS Code / Cursor extension (optional) ─────────────────────────────────
-if [[ "$INSTALL_EXT" -eq 1 ]]; then
-  echo ""
-  info "Installing VS Code / Cursor extension..."
-  if steer-agent install --ext 2>&1; then
-    ok "Extension installed"
-  else
-    warn "Extension install failed. Try manually:"
-    warn "  steer-agent install --ext"
-  fi
+# ── 6. Install extension via steer-agent install ──────────────────────────────
+echo ""
+info "Installing VS Code / Cursor extension..."
+if steer-agent install 2>&1 | grep -q "Extension installed"; then
+  ok "Extension installed"
+else
+  # steer-agent install already prints its own status — just surface the warning
+  warn "Extension auto-install failed. Run manually: steer-agent install"
 fi
 
 # ── 7. Create stable symlinks so steer-agent works across nvm versions ───────
