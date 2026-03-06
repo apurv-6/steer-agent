@@ -78,13 +78,27 @@ fi
 info "Installing dependencies and building..."
 cd "${TMPDIR_INSTALL}/repo"
 
-# Install all workspace deps and build
+# Install all workspace deps
 if ! npm install --workspaces 2>&1; then
   die "npm install failed. Check that Node.js ${MIN_NODE}+ is installed."
 fi
 
-if ! npm run build --workspaces 2>&1; then
-  die "Build failed. Check the repository for errors."
+# Build in dependency order: core → mcp-server + extension → cli
+info "Building packages (core → mcp-server → cli)..."
+if ! npm run build --workspace=packages/core 2>&1; then
+  die "Build failed: packages/core"
+fi
+
+if ! npm run build --workspace=packages/mcp-server 2>&1; then
+  die "Build failed: packages/mcp-server"
+fi
+
+if ! npm run build --workspace=packages/cursor-extension 2>&1; then
+  warn "Extension build failed (non-fatal — continuing without sidebar)"
+fi
+
+if ! npm run build --workspace=packages/cli 2>&1; then
+  die "Build failed: packages/cli"
 fi
 
 # Pack the CLI package and install it globally
