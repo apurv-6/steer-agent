@@ -1,72 +1,172 @@
 # SteerAgent
 
-**AI workflow governance for engineering teams.** Standardizes how developers collaborate with AI coding agents — structured workflows, guardrails, measurement, and compounding knowledge. No prompting skill required.
+**AI workflow governance for engineering teams.** Wraps every AI coding session in a structured 8-step workflow — context gathering, planning, execution, reflection, verification, and compounding knowledge. No prompting skill required.
 
-## What It Does
+> ESLint enforces code quality. SteerAgent enforces AI collaboration quality.
+
+## The Problem
 
 | Without SteerAgent | With SteerAgent |
 |---|---|
-| Developer types vague prompt | Developer answers 2-3 structured questions |
-| 5-7 iterations to get useful output | 1-2 iterations (FPCR 70%+) |
-| Context manually typed, often incomplete | Context auto-gathered from codebase, Jira, Sentry, git |
-| Expensive models used for trivial tasks | Deterministic routing to right model tier |
-| Knowledge lost after each task | Knowledge compounds across team via git |
-| No measurement | FPCR dashboard, telemetry, leadership reports |
+| Vague prompt → 5-7 iterations | Structured questions → 1-2 iterations |
+| Context manually typed | Auto-loaded from codebase, Jira, Sentry, git |
+| Expensive model for trivial tasks | Deterministic routing to right tier |
+| Knowledge lost each session | Compounds across team in git |
+| No measurement | FPCR dashboard + telemetry |
 
-## Architecture
-
-```
-Layer 3: VS Code/Cursor Extension (v1: read-only, v2: full 5-tab sidebar)
-Layer 2: MCP Server (workflow engine — owns ALL logic)
-Layer 1: .steer/ folder (templates, rules, knowledge — committed to git)
-```
-
-Works in **any MCP host**: Cursor, VS Code, Claude Code, OpenCode, Gemini CLI, Windsurf.
+---
 
 ## Quick Start
 
+### Option 1 — curl (recommended)
+
 ```bash
-# 1. Install (once per machine):
-npm install -g @coinswitch/steer-agent
-steer-agent install          # Registers MCP server + skills + hooks
-
-# 2. Initialize (once per project):
-cd ~/bitbucketRepo/your-project
-steer-agent init --template coinswitch
-
-# 3. Use (in Claude Code):
-/steer-start Fix the null pointer in auth/TokenService
-
-# Maintenance:
-steer-agent status           # Check health
-steer-agent doctor           # Auto-fix issues
-steer-agent update           # Update to latest
+curl -fsSL https://raw.githubusercontent.com/apurv-6/steer-agent/main/install.sh | bash
 ```
 
-## 8-Step Workflow
+Installs from source: clones the repo, builds, installs globally, registers MCP + hook + skills, and installs the Cursor/VS Code extension automatically.
 
-Every task, every mode, every time:
+### Option 2 — npm
 
-1. **Context Gathering** — load knowledge + codemap + git + external sources
-2. **Prompt Assembly** — build structured prompt from all context
-3. **Planning** — impact preview + approval required
-4. **Execution** — single-agent or parallel sub-agents
-5. **Reflection** — self-review before presenting to developer
-6. **Verification** — acceptance gate
-7. **Learning** — extract and persist knowledge for future tasks
-8. **Output** — commit message + PR description + telemetry
+```bash
+npm install -g @coinswitch/steer-agent
+# postinstall auto-registers: MCP server + hook + skills + extension
+```
 
-## Extension v2 (5-Tab Sidebar)
+### Then initialize your project
+
+```bash
+# Once per repo
+cd ~/your-project
+steer-agent init --template coinswitch
+
+# Restart Claude Code → type /steer-start
+```
+
+That's it. No manual settings.json editing. No symlink debugging.
+
+---
+
+## CLI Reference
+
+```
+steer-agent install [--no-ext] Register MCP + hook + skills + extension. --no-ext skips sidebar
+steer-agent init [options]     Create .steer/ in current project
+steer-agent status             Show global + project health
+steer-agent doctor             Diagnose and auto-fix broken MCP/hooks/skills
+steer-agent update             Update to latest version
+steer-agent uninstall          Remove global components (keeps .steer/ project data)
+```
+
+**Init options:**
+```
+--template coinswitch|minimal|strict   Governance preset (default: minimal)
+--team <name>                          Team name
+--force                                Overwrite existing .steer/
+```
+
+---
+
+## How It Works
+
+### Architecture
+
+```
+Layer 3: Cursor / VS Code Extension  (5-tab sidebar — optional)
+           ↕  read + MCP commands
+Layer 2: MCP Server                  (workflow engine — owns all logic)
+           ↕  reads/writes
+Layer 1: .steer/ folder              (config, rules, knowledge — committed to git)
+```
+
+- Works in **any MCP host**: Cursor, VS Code, Claude Code, Windsurf, OpenCode, Gemini CLI
+- Extension is optional — full functionality via MCP alone
+
+### 8-Step Workflow
+
+Every task runs through the same pipeline:
+
+```
+1. Context      — codebase map + RAG + knowledge files + git + Jira/Sentry
+2. Prompt       — structured template assembled from all context
+3. Plan         — impact preview + file scope + sub-agent split decision
+4. Execute      — single agent or parallel sub-agents (file-isolated)
+5. Reflect      — self-review: plan coverage, scope, acceptance criteria
+6. Verify       — acceptance gate checklist
+7. Learn        — extract patterns → persist to .steer/knowledge/
+8. Output       — commit message + PR description + FPCR telemetry
+```
+
+### Governance Rules
+
+Rules live in `.steer/RULES.md`:
+
+| Severity | Behavior |
+|---|---|
+| `[BLOCK]` | Hard stop — explicit approval required |
+| `[WARN]` | Warning surfaced — acknowledged before proceeding |
+| `[AUTO]` | Enforced automatically (e.g. lint before commit) |
+
+CoinSwitch preset includes: scope restriction, auth/payments module guard, test coverage, repository pattern, PR size limit, lint-on-commit.
+
+---
+
+## Extension Sidebar (5 Tabs)
 
 | Tab | What It Shows |
 |---|---|
-| Task | Active task card, workflow progress, CLEAR score, task input |
-| Knowledge | Module learnings, failed approaches, search |
-| FPCR | First-Pass Completion Rate, team metrics, leaderboard |
+| Task | Active task, workflow progress, model tier, CLEAR score |
+| Knowledge | Module learnings, failed approaches, searchable |
+| FPCR | First-Pass Completion Rate, avg rounds, task history chart |
 | Map | Codebase intelligence, module tree, change coupling |
-| Rules | Active rules, hooks, governance status |
+| Rules | Active rules, hook status, governance overview |
 
-## MCP Configuration
+Installed automatically. Skip with: `steer-agent install --no-ext`
+
+---
+
+## Slash Commands (16 skills)
+
+After install, these work in Claude Code chat:
+
+```
+/steer-start     Begin a new task (mode picker → context → plan)
+/steer-plan      Create execution plan with impact preview
+/steer-execute   Execute approved plan
+/steer-verify    Run acceptance gate
+/steer-learn     Extract and persist learnings
+/steer-commit    Generate Conventional Commits message
+/steer-pr        Generate PR description
+/steer-status    Show current task progress
+/steer-map       Rebuild codebase map
+/steer-gate      Score a prompt (CLEAR dimensions)
+/steer-impact    Preview change impact for files
+/steer-resume    Resume an interrupted task
+/steer-similar   Find similar past tasks
+/steer-knowledge Search/view knowledge files
+/steer-init      Initialize .steer/ (alias for CLI)
+```
+
+---
+
+## Project Structure
+
+```
+.steer/                   ← committed to git
+  config.json             ← routing rules, model policy, integrations
+  RULES.md                ← governance rules (BLOCK / WARN / AUTO)
+  hooks.yaml              ← lifecycle hooks (pre-context, post-plan, post-execute)
+  templates/              ← prompt templates per mode (bugfix, feature, refactor...)
+  knowledge/              ← compounding team knowledge (grows with every task)
+  state/                  ← runtime state (gitignored)
+    current-task.json     ← single source of truth for active task
+    history.jsonl         ← FPCR telemetry
+    learnings.jsonl       ← raw learning entries
+```
+
+---
+
+## MCP Server Config
 
 `steer-agent install` writes this automatically to `~/.claude/settings.json`:
 
@@ -74,57 +174,44 @@ Every task, every mode, every time:
 {
   "mcpServers": {
     "steer-agent": {
-      "command": "steer-mcp",
-      "args": [],
-      "env": {}
+      "command": "node",
+      "args": ["/path/to/steer-agent/dist/mcp-entry.js"]
     }
   }
 }
 ```
 
-## CLI Reference
+14 MCP tools: `steer.init` `steer.start` `steer.plan` `steer.execute` `steer.verify` `steer.status` `steer.map` `steer.impact` `steer.resume` `steer.similar` `steer.commit` `steer.pr` `steer.learn` `steer.knowledge`
+
+---
+
+## Monorepo Layout
 
 ```
-steer-agent install          Register MCP + skills + hooks (once per machine)
-steer-agent init [options]   Initialize .steer/ in current project
-steer-agent status           Show installation and project health
-steer-agent doctor           Diagnose and auto-fix issues
-steer-agent update           Update to latest version
-steer-agent uninstall        Remove global components (keeps project data)
+packages/
+  core/              @steer-agent-tool/core — scoring, routing, RAG, state, codemap
+  mcp-server/        MCP server (14 tools)
+  cli/               @coinswitch/steer-agent — published CLI package
+  cursor-extension/  VS Code / Cursor sidebar extension
 ```
-
-**Init options:**
-
-```
---template coinswitch|minimal|strict   Governance preset (default: minimal)
---team <name>                           Team name
---org <name>                            Organization name
---force                                 Overwrite existing .steer/
-```
-
-## Governance Rules
-
-Rules live in `.steer/RULES.md`. Three severities:
-
-| Severity | Behavior |
-|---|---|
-| `[BLOCK]` | Hard stop — must get explicit approval to proceed |
-| `[WARN]` | Warning shown — Claude may continue but must acknowledge |
-| `[AUTO]` | Automatically enforced (e.g. lint before commit) |
-
-Default CoinSwitch preset: scope restriction, auth/payments guard, test coverage, repository pattern, PR size limit, lint-on-commit.
-
-## Docs
-
-- [Spec v3.0](.planning/SPEC-V3.md) — Full master specification
-
-## Build
 
 ```bash
 npm install
-npm run build --workspaces
-npm test
+npm run build          # build all packages
+npm test               # run tests (vitest)
+npm run link:cli       # link CLI globally for local testing
+npm run publish:cli    # build + publish to Artifactory
 ```
+
+---
+
+## Key Metric: FPCR
+
+**First-Pass Completion Rate** = tasks completed in ≤ 2 rounds / total tasks × 100%
+
+- Target: 70%+ after 60-day Phase 2 rollout
+- Measured per developer, per team, per mode
+- Visible in the FPCR tab and `steer-agent status`
 
 ---
 
