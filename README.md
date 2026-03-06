@@ -18,20 +18,11 @@
 
 ## Quick Start
 
-### Option 1 — curl (recommended)
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/apurv-6/steer-agent/main/install.sh | bash
 ```
 
-Installs from source: clones the repo, builds, installs globally, registers MCP + hook + skills, and installs the Cursor/VS Code extension automatically.
-
-### Option 2 — npm
-
-```bash
-npm install -g @coinswitch/steer-agent
-# postinstall auto-registers: MCP server + hook + skills + extension
-```
+Clones the repo, builds, installs globally, and registers MCP + hook + skills + extension automatically.
 
 ### Then initialize your project
 
@@ -50,7 +41,7 @@ That's it. No manual settings.json editing. No symlink debugging.
 ## CLI Reference
 
 ```
-steer-agent install [--no-ext] Register MCP + hook + skills + extension. --no-ext skips sidebar
+steer-agent install [--no-ext] Re-register MCP + hook + skills + extension. --no-ext skips sidebar
 steer-agent init [options]     Create .steer/ in current project
 steer-agent status             Show global + project health
 steer-agent doctor             Diagnose and auto-fix broken MCP/hooks/skills
