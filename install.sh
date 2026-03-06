@@ -58,7 +58,69 @@ if ! command -v npm &>/dev/null; then
 fi
 ok "npm $(npm --version)"
 
-# ── 4. Install from GitHub ────────────────────────────────────────────────────
+# ── 4. Clean up previous installation ────────────────────────────────────────
+echo ""
+info "Cleaning up previous installation (if any)..."
+
+# 4a. Uninstall global npm package
+if npm ls -g @coinswitch/steer-agent &>/dev/null; then
+  STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null \
+    || sudo STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null \
+    || true
+  ok "Removed previous npm package"
+fi
+
+# 4b. Remove symlinks from stable dirs
+for dir in /usr/local/bin "${HOME}/.local/bin"; do
+  for cmd in steer-agent steer-mcp steer-hook-prompt; do
+    if [[ -L "${dir}/${cmd}" ]] || [[ -f "${dir}/${cmd}" ]]; then
+      rm -f "${dir}/${cmd}" 2>/dev/null || sudo rm -f "${dir}/${cmd}" 2>/dev/null || true
+    fi
+  done
+done
+ok "Removed old symlinks"
+
+# 4c. Remove steer skills from ~/.claude/skills/
+GLOBAL_SKILLS_DIR="${HOME}/.claude/skills"
+if [[ -d "$GLOBAL_SKILLS_DIR" ]]; then
+  for skill in "${GLOBAL_SKILLS_DIR}"/steer "${GLOBAL_SKILLS_DIR}"/steer-*; do
+    [[ -e "$skill" || -L "$skill" ]] && rm -rf "$skill" 2>/dev/null || true
+  done
+  ok "Removed old skills"
+fi
+
+# 4d. Remove steer-agent entries from ~/.claude/settings.json
+CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
+if [[ -f "$CLAUDE_SETTINGS" ]] && command -v node &>/dev/null; then
+  node -e "
+    const fs = require('fs');
+    const p = '${CLAUDE_SETTINGS}';
+    try {
+      const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+      // Remove MCP server
+      if (s.mcpServers) delete s.mcpServers['steer-agent'];
+      // Remove steer hooks from UserPromptSubmit
+      if (s.hooks && Array.isArray(s.hooks.UserPromptSubmit)) {
+        s.hooks.UserPromptSubmit = s.hooks.UserPromptSubmit.filter(h => {
+          const cmd = JSON.stringify(h);
+          return !cmd.includes('prompt-submit') && !cmd.includes('steer-hook-prompt');
+        });
+      }
+      fs.writeFileSync(p, JSON.stringify(s, null, 2));
+    } catch {}
+  " 2>/dev/null
+  ok "Cleaned settings.json"
+fi
+
+# 4e. Uninstall Cursor/VS Code extension
+for editor in cursor code; do
+  if command -v "$editor" &>/dev/null; then
+    "$editor" --uninstall-extension steer-agent-tool.steer-agent-tool-extension 2>/dev/null && true
+  fi
+done
+ok "Removed old extension"
+
+# ── 5. Install from GitHub ────────────────────────────────────────────────────
 echo ""
 info "Installing from GitHub (${GITHUB_REPO}@${GITHUB_REF})..."
 

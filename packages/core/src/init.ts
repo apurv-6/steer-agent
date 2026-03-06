@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { buildCodebaseMap } from "./codemap-static.js";
+import { buildIndex } from "./rag/indexer.js";
 
 const DEFAULT_CONFIG = {
   version: "3.0",
@@ -379,6 +380,14 @@ export async function initSteer(cwd: string, opts: InitOptions = {}) {
     await fs.writeJSON(path.join(steerDir, "codebase-map.json"), map, { spaces: 2 });
   } catch (err) {
     console.error("Failed to build codebase map:", err);
+  }
+
+  // 10. Build RAG keyword index
+  console.error("Building RAG index...");
+  try {
+    await buildIndex(cwd);
+  } catch (err) {
+    console.error("Failed to build RAG index (non-fatal):", err);
   }
 
   return { success: true, path: steerDir };

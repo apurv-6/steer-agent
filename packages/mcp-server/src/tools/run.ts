@@ -21,6 +21,8 @@ import {
   loadHooks,
   logToolCall,
   steerDirExists,
+  loadIndex,
+  searchChunks,
 } from "@steer-agent-tool/core";
 import type { TaskState, AssemblyContext } from "@steer-agent-tool/core";
 
@@ -128,6 +130,22 @@ function planPhase(state: TaskState, statePath: string, cwd: string, args: RunAr
     ? JSON.parse(readFileSync(codemapPath, "utf-8"))
     : undefined;
 
+  // RAG: load index and retrieve relevant chunks for the goal
+  let ragChunks: ReturnType<typeof searchChunks> = [];
+  try {
+    const ragIndex = loadIndex(cwd);
+    if (ragIndex) {
+      ragChunks = searchChunks(args.goal, ragIndex, 8);
+      state.ragSources = ragChunks.map((r) => ({
+        file: r.chunk.file,
+        score: r.score,
+        chunk: r.chunk.content.substring(0, 200),
+      }));
+    }
+  } catch {
+    // RAG failure is non-fatal — continue with static context only
+  }
+
   const assemblyCtx: AssemblyContext = {
     cwd,
     mode: state.mode,
@@ -136,6 +154,7 @@ function planPhase(state: TaskState, statePath: string, cwd: string, args: RunAr
     similarTasks,
     codemap,
     files,
+    ragChunks,
   };
   const assembledPrompt = assemblePrompt(assemblyCtx);
   state.assembledPrompt = assembledPrompt;
