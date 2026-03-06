@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { Mode, KnowledgeEntry, SimilarTask, CodebaseMap } from "./types.js";
 import { loadRules, loadGlobalKnowledge } from "./knowledgeLoader.js";
+import type { SearchResult } from "./rag/retriever.js";
 
 export interface AssemblyContext {
   cwd: string;
@@ -18,6 +19,8 @@ export interface AssemblyContext {
   gitContext?: string;
   /** Affected files */
   files?: string[];
+  /** RAG search results from keyword index */
+  ragChunks?: SearchResult[];
 }
 
 /**
@@ -63,6 +66,11 @@ export function assemblePrompt(ctx: AssemblyContext): string {
 
   if (ctx.similarTasks.length > 0) {
     sections.push(`## Similar Past Tasks\n${formatSimilarTasks(ctx.similarTasks)}`);
+  }
+
+  const ragBlock = formatRagChunks(ctx.ragChunks);
+  if (ragBlock) {
+    sections.push(`## Relevant Code (RAG)\n${ragBlock}`);
   }
 
   sections.push(assembled);
@@ -177,6 +185,13 @@ function formatSimilarTasks(tasks: SimilarTask[]): string {
   return tasks
     .map((t) => `- [${t.mode}] ${t.goal} (similarity: ${t.score.toFixed(1)})${t.resolution ? ` → ${t.resolution}` : ""}`)
     .join("\n");
+}
+
+function formatRagChunks(chunks?: SearchResult[]): string {
+  if (!chunks || chunks.length === 0) return "";
+  return chunks
+    .map((r) => `### ${r.chunk.file} (score: ${r.score.toFixed(2)})\n\`\`\`\n${r.chunk.content}\n\`\`\``)
+    .join("\n\n");
 }
 
 function escapeRegex(str: string): string {

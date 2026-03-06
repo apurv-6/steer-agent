@@ -82,5 +82,10 @@ export { completeTask } from "./completion.js";
 export type { HistoryEntry } from "./completion.js";
 export { logSteer, logToolCall } from "./logger.js";
 
+// RAG
+export { buildIndex, loadIndex } from "./rag/indexer.js";
+export { searchChunks } from "./rag/retriever.js";
+export type { SearchResult } from "./rag/retriever.js";
+
 // Path resolution
 export { findSteerDir, steerDirExists } from "./paths.js";

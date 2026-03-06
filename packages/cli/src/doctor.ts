@@ -30,6 +30,11 @@ function saveSettings(home: string, settings: Record<string, unknown>): void {
 }
 
 function resolveSkillsDir(): string | null {
+  // 1. Package-local skills/ (present after prepack / in published npm package)
+  const pkgLocal = path.join(__dirname, "..", "skills");
+  if (fs.existsSync(pkgLocal)) return pkgLocal;
+
+  // 2. Walk up from __dirname to find .claude/skills/ (monorepo / npm link)
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
     const candidate = path.join(dir, ".claude", "skills");
@@ -118,16 +123,25 @@ export async function runDoctor(): Promise<void> {
   // 3. Hook registration
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
   const userHooks = (hooks.UserPromptSubmit ?? []) as Array<Record<string, unknown>>;
-  const hasHook = userHooks.some(
-    (h) => typeof h.command === "string" && h.command.includes("steer-hook-prompt")
-  );
+  const hasHook = userHooks.some((h) => {
+    // Check new format: { hooks: [{ command: "..." }] }
+    if (h && Array.isArray(h.hooks)) {
+      return (h.hooks as Array<Record<string, unknown>>).some(
+        (inner) => typeof inner.command === "string" && (inner.command.includes("steer-hook-prompt") || inner.command.includes("prompt-submit"))
+      );
+    }
+    // Check old format: { command: "..." }
+    return typeof h.command === "string" && (h.command.includes("steer-hook-prompt") || h.command.includes("prompt-submit"));
+  });
   if (hasHook) {
     results.push({ label: "UserPromptSubmit hook", status: "ok", message: "Registered" });
   } else {
     if (!settings.hooks) (settings as Record<string, unknown>).hooks = {};
     const h = settings.hooks as Record<string, unknown>;
     if (!h.UserPromptSubmit) h.UserPromptSubmit = [];
-    (h.UserPromptSubmit as Array<unknown>).push({ type: "command", command: "steer-hook-prompt", timeout: 5000 });
+    (h.UserPromptSubmit as Array<unknown>).push({
+      hooks: [{ type: "command", command: "steer-hook-prompt", timeout: 5000 }],
+    });
     settingsChanged = true;
     results.push({ label: "UserPromptSubmit hook", status: "fixed", message: "Was missing — registered steer-hook-prompt" });
   }

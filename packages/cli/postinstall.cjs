@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execSync } = require('child_process');
 
 const PKG_ROOT = __dirname; // packages/cli/ directory
 const HOME = os.homedir();
@@ -29,6 +30,36 @@ function findMcpBin() {
 function findHookBin() {
   const p = path.join(PKG_ROOT, 'dist', 'hooks', 'prompt-submit.js');
   return fs.existsSync(p) ? p : null;
+}
+
+function findVsixPath() {
+  // 1. Package-local extension/ dir (after prepack copy)
+  const localExt = path.join(PKG_ROOT, 'extension');
+  if (fs.existsSync(localExt)) {
+    const files = fs.readdirSync(localExt).filter(f => f.endsWith('.vsix'));
+    if (files.length > 0) {
+      files.sort().reverse(); // newest version first
+      return path.join(localExt, files[0]);
+    }
+  }
+  // 2. Walk up to find packages/cursor-extension/ (monorepo / npm link)
+  let dir = PKG_ROOT;
+  for (let i = 0; i < 8; i++) {
+    for (const sub of ['packages/cursor-extension', 'cursor-extension']) {
+      const candidate = path.join(dir, sub);
+      if (fs.existsSync(candidate)) {
+        const files = fs.readdirSync(candidate).filter(f => f.endsWith('.vsix'));
+        if (files.length > 0) {
+          files.sort().reverse();
+          return path.join(candidate, files[0]);
+        }
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 
 function findSkillsSrc() {
@@ -91,16 +122,24 @@ function main() {
       if (!settings.hooks) settings.hooks = {};
       if (!settings.hooks.UserPromptSubmit) settings.hooks.UserPromptSubmit = [];
 
-      const hasHook = settings.hooks.UserPromptSubmit.some(h =>
-        h && (String(h.command || '').includes('prompt-submit') ||
-              String(h.command || '').includes('steer-hook-prompt'))
-      );
+      const hasHook = settings.hooks.UserPromptSubmit.some(h => {
+        // Check new format: { hooks: [{ command: "..." }] }
+        if (h && Array.isArray(h.hooks)) {
+          return h.hooks.some(inner => String(inner.command || '').includes('prompt-submit') ||
+            String(inner.command || '').includes('steer-hook-prompt'));
+        }
+        // Check old format: { command: "..." }
+        return h && (String(h.command || '').includes('prompt-submit') ||
+              String(h.command || '').includes('steer-hook-prompt'));
+      });
 
       if (!hasHook) {
         settings.hooks.UserPromptSubmit.push({
-          type: 'command',
-          command: 'node ' + hookBin,
-          timeout: 5000,
+          hooks: [{
+            type: 'command',
+            command: 'node ' + hookBin,
+            timeout: 5000,
+          }],
         });
         changed = true;
         log('✅ Hook registered');
@@ -131,9 +170,28 @@ function main() {
       log('⚠️  Skills not found. Run: steer-agent install');
     }
 
+    // ── Install extension ──
+    const vsixPath = findVsixPath();
+    if (vsixPath) {
+      let installed = false;
+      for (const editor of ['cursor', 'code']) {
+        try {
+          execSync(editor + ' --install-extension "' + vsixPath + '" 2>/dev/null', { stdio: 'pipe' });
+          log('✅ Extension installed via ' + editor);
+          installed = true;
+          break;
+        } catch {}
+      }
+      if (!installed) {
+        log('⚠️  Extension auto-install failed. Install manually:');
+        log('   Cmd+Shift+P → "Extensions: Install from VSIX" → ' + vsixPath);
+      }
+    } else {
+      log('⚠️  No .vsix found. Run: steer-agent install --ext');
+    }
+
     console.log('');
     log('Done! Next steps:');
-    log('  steer-agent install --ext   ← install VS Code / Cursor sidebar (optional)');
     log('  cd <your-project> && steer-agent init');
     log('  Restart Claude Code → /steer-start');
     console.log('');

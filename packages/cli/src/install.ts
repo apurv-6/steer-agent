@@ -170,9 +170,16 @@ export async function runInstall(argv: string[]): Promise<void> {
   if (!hooks.UserPromptSubmit) hooks.UserPromptSubmit = [];
   const userHooks = hooks.UserPromptSubmit as Array<Record<string, unknown>>;
 
-  const hasSteerHook = userHooks.some(
-    (h) => typeof h.command === "string" && h.command.includes("steer-hook-prompt")
-  );
+  const hasSteerHook = userHooks.some((h) => {
+    // Check new format: { hooks: [{ command: "..." }] }
+    if (h && Array.isArray((h as Record<string, unknown>).hooks)) {
+      return ((h as Record<string, unknown>).hooks as Array<Record<string, unknown>>).some(
+        (inner) => typeof inner.command === "string" && (inner.command.includes("steer-hook-prompt") || inner.command.includes("prompt-submit"))
+      );
+    }
+    // Check old format: { command: "..." }
+    return typeof h.command === "string" && (h.command.includes("steer-hook-prompt") || h.command.includes("prompt-submit"));
+  });
 
   // Prefer absolute path for the hook binary to survive PATH changes
   const hookAbsPath = path.join(__dirname, "hooks", "prompt-submit.js");
@@ -182,20 +189,29 @@ export async function runInstall(argv: string[]): Promise<void> {
 
   if (!hasSteerHook || args.force) {
     if (args.force) {
-      const filtered = userHooks.filter(
-        (h) => !(typeof h.command === "string" && h.command.includes("steer-hook-prompt"))
-      );
+      const filtered = userHooks.filter((h) => {
+        if (h && Array.isArray((h as Record<string, unknown>).hooks)) {
+          return !((h as Record<string, unknown>).hooks as Array<Record<string, unknown>>).some(
+            (inner) => typeof inner.command === "string" && (inner.command.includes("steer-hook-prompt") || inner.command.includes("prompt-submit"))
+          );
+        }
+        return !(typeof h.command === "string" && (h.command.includes("steer-hook-prompt") || h.command.includes("prompt-submit")));
+      });
       hooks.UserPromptSubmit = filtered;
       (hooks.UserPromptSubmit as Array<unknown>).push({
-        type: "command",
-        command: hookCmd,
-        timeout: 5000,
+        hooks: [{
+          type: "command",
+          command: hookCmd,
+          timeout: 5000,
+        }],
       });
     } else {
       userHooks.push({
-        type: "command",
-        command: hookCmd,
-        timeout: 5000,
+        hooks: [{
+          type: "command",
+          command: hookCmd,
+          timeout: 5000,
+        }],
       });
     }
     changed = true;

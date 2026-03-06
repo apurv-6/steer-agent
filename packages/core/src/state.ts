@@ -45,6 +45,17 @@ export interface TaskState {
   goal?: string;            // task goal/description
   acceptanceCriteria?: string[];
   reflectionIssues?: string[];  // issues found during reflection
+  assembledPrompt?: string;
+  subAgentDecision?: {
+    shouldSplit: boolean;
+    reason: string;
+    agents: Array<{ id: string; files: string[]; description: string }>;
+  };
+
+  // Phase 2 output fields
+  ragSources?: Array<{ file: string; score: number; chunk: string }>;
+  commitMessage?: string;
+  prDescription?: string;
 }
 
 export const INITIAL_STATE: TaskState = {
