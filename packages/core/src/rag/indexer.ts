@@ -34,9 +34,10 @@ export async function buildIndex(root: string): Promise<KeywordIndex> {
     allChunks.push(...chunks);
   }
 
-  // Build inverted index
-  const invertedIndex: Record<string, string[]> = {};
-  const df: Record<string, number> = {};
+  // Build inverted index (use null-prototype objects to avoid collisions with
+  // built-in Object properties like "constructor", "toString", etc.)
+  const invertedIndex: Record<string, string[]> = Object.create(null);
+  const df: Record<string, number> = Object.create(null);
 
   for (const chunk of allChunks) {
     const uniqueKeywords = new Set(chunk.keywords);
