@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { startTask as coreStartTask } from "@steer-agent-tool/core";
 
 const execAsync = promisify(exec);
 
@@ -28,7 +29,22 @@ export function registerBridgeCommands(context: vscode.ExtensionContext): void {
       });
       if (!mode) return;
 
-      vscode.window.showInformationMessage(`Starting task: ${goal} (${mode})`);
+      const taskId = `task_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+      try {
+        vscode.window.showInformationMessage(`Starting task: ${goal} (${mode})...`);
+        const result = await coreStartTask({
+          cwd,
+          mode: mode as any,
+          taskId,
+          initialMessage: goal,
+        });
+        vscode.window.showInformationMessage(
+          `Task started: ${result.state.taskId} — ${result.message}`,
+        );
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`Failed to start task: ${err.message}`);
+      }
     }),
 
     vscode.commands.registerCommand("steeragent.showStatus", () => {
