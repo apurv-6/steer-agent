@@ -4,6 +4,7 @@
   "description": "AI Workflow Governance — MCP Server + CLI for Claude Code",
   "author": "Apurv Singh <apurv.singh@coinswitch.co>",
   "license": "UNLICENSED",
+  "type": "module",
   "bin": {
     "steer-agent":       "./dist/index.js",
     "steer-mcp":         "./dist/mcp-entry.js",
