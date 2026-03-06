@@ -5,10 +5,12 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace=packages/core && npm run build --workspace=packages/mcp-server && npm run build --workspace=packages/cursor-extension && npm run build --workspace=packages/cli",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "publish:cli": "npm run build && cd packages/cli && npm publish",
+    "link:cli": "npm run build && cd packages/cli && npm link"
   },
   "devDependencies": {
     "typescript": "^5.7.3"
