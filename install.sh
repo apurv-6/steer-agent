@@ -158,10 +158,16 @@ fi
 info "Building and packaging Cursor extension..."
 if ! npm run build --workspace=packages/cursor-extension 2>&1; then
   warn "Extension build failed (non-fatal — continuing without sidebar)"
-elif ! (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && echo y | npx vsce package --no-dependencies --allow-missing-repository 2>&1); then
-  warn "Extension packaging failed (non-fatal — continuing without sidebar)"
 else
-  ok "Extension packaged"
+  # Package the extension — vsce prompts interactively for missing fields,
+  # so we pipe "yes" and use --allow-missing-repository to handle all cases
+  VSIX_BUILT=0
+  if (cd "${TMPDIR_INSTALL}/repo/packages/cursor-extension" && yes | npx vsce package --no-dependencies --allow-missing-repository 2>&1); then
+    VSIX_BUILT=1
+    ok "Extension packaged"
+  else
+    warn "Extension packaging failed (non-fatal — continuing without sidebar)"
+  fi
 fi
 
 if ! npm run build --workspace=packages/cli 2>&1; then
@@ -185,14 +191,37 @@ else
 fi
 
 
-# ── 6. Install extension via steer-agent install ──────────────────────────────
+# ── 6. Register MCP + hooks + skills + extension ─────────────────────────────
 echo ""
-info "Installing VS Code / Cursor extension..."
-if steer-agent install 2>&1 | grep -q "Extension installed"; then
-  ok "Extension installed"
+info "Registering MCP server, hooks, skills, and extension..."
+steer-agent install 2>&1 || true
+
+# If steer-agent install didn't find the vsix, install it directly from the build
+VSIX_FILE=""
+for f in "${TMPDIR_INSTALL}/repo/packages/cursor-extension/"*.vsix; do
+  [[ -f "$f" ]] && VSIX_FILE="$f" && break
+done
+
+if [[ -n "$VSIX_FILE" ]]; then
+  EXT_INSTALLED=0
+  for editor in cursor code; do
+    if command -v "$editor" &>/dev/null; then
+      if "$editor" --uninstall-extension steer-agent-tool.steer-agent-tool-extension 2>/dev/null; then
+        ok "Removed old extension from ${editor}"
+      fi
+      if "$editor" --install-extension "$VSIX_FILE" 2>/dev/null; then
+        ok "Extension installed via ${editor}"
+        EXT_INSTALLED=1
+        break
+      fi
+    fi
+  done
+  if [[ "$EXT_INSTALLED" -eq 0 ]]; then
+    warn "Extension auto-install failed. Install manually:"
+    warn "  Open Cursor/VS Code → Cmd+Shift+P → 'Extensions: Install from VSIX'"
+  fi
 else
-  # steer-agent install already prints its own status — just surface the warning
-  warn "Extension auto-install failed. Run manually: steer-agent install"
+  warn "No .vsix file found. Extension not installed."
 fi
 
 # ── 7. Create stable symlinks so steer-agent works across nvm versions ───────
