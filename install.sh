@@ -11,6 +11,7 @@ GITHUB_REF="main"
 CLI_PKG_PATH="packages/cli"
 MIN_NODE=18
 INSTALL_EXT=0
+USER_LOCAL_INSTALL=0
 
 # ── Parse args ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -58,27 +59,44 @@ if ! command -v npm &>/dev/null; then
 fi
 ok "npm $(npm --version)"
 
+# ── 3b. Detect sudo availability (non-interactive) ──────────────────────────
+HAS_SUDO=0
+if sudo -n true 2>/dev/null; then
+  HAS_SUDO=1
+else
+  warn "No admin access detected. Installing to ~/.local — ensure ~/.local/bin is in your PATH."
+  mkdir -p "${HOME}/.local/bin"
+fi
+
 # ── 4. Clean up previous installation ────────────────────────────────────────
 echo ""
 info "Cleaning up previous installation (if any)..."
 
 # 4a. Uninstall global npm package
 if npm ls -g @coinswitch/steer-agent &>/dev/null; then
-  STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null \
-    || sudo STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null \
-    || true
-  ok "Removed previous npm package"
+  if STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null; then
+    ok "Removed previous npm package"
+  elif [[ "$HAS_SUDO" -eq 1 ]]; then
+    sudo STEER_SKIP_POSTINSTALL=1 npm uninstall -g @coinswitch/steer-agent 2>/dev/null || true
+    ok "Removed previous npm package (via sudo)"
+  else
+    warn "Could not remove previous npm package (no admin access). Skipping."
+  fi
 fi
 
 # 4b. Remove symlinks from stable dirs
 for dir in /usr/local/bin "${HOME}/.local/bin"; do
   for cmd in steer-agent steer-mcp steer-hook-prompt; do
     if [[ -L "${dir}/${cmd}" ]] || [[ -f "${dir}/${cmd}" ]]; then
-      rm -f "${dir}/${cmd}" 2>/dev/null || sudo rm -f "${dir}/${cmd}" 2>/dev/null || true
+      if rm -f "${dir}/${cmd}" 2>/dev/null; then
+        true
+      elif [[ "$HAS_SUDO" -eq 1 ]]; then
+        sudo rm -f "${dir}/${cmd}" 2>/dev/null || true
+      fi
     fi
   done
 done
-ok "Removed old symlinks"
+ok "Cleaned up old symlinks"
 
 # 4c. Remove steer skills from ~/.claude/skills/
 GLOBAL_SKILLS_DIR="${HOME}/.claude/skills"
@@ -179,14 +197,24 @@ cd "${TMPDIR_INSTALL}/repo/${CLI_PKG_PATH}"
 TARBALL="$(npm pack --json 2>/dev/null | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');console.log(JSON.parse(d)[0].filename)" || npm pack 2>/dev/null | tail -1)"
 
 cd /tmp
-if npm install -g "${TMPDIR_INSTALL}/repo/${CLI_PKG_PATH}/${TARBALL}" 2>&1; then
+TARBALL_PATH="${TMPDIR_INSTALL}/repo/${CLI_PKG_PATH}/${TARBALL}"
+if npm install -g "${TARBALL_PATH}" 2>&1; then
   ok "steer-agent installed from GitHub"
-else
+elif [[ "$HAS_SUDO" -eq 1 ]]; then
   warn "npm install -g failed. Trying with sudo..."
-  if sudo npm install -g "${TMPDIR_INSTALL}/repo/${CLI_PKG_PATH}/${TARBALL}" 2>&1; then
+  if sudo npm install -g "${TARBALL_PATH}" 2>&1; then
     ok "steer-agent installed (via sudo)"
   else
-    die "Installation failed. Try: sudo bash install.sh"
+    die "Installation failed even with sudo."
+  fi
+else
+  warn "Global npm install failed (no admin access). Installing to ~/.local..."
+  mkdir -p "${HOME}/.local"
+  if NPM_CONFIG_PREFIX="${HOME}/.local" npm install -g "${TARBALL_PATH}" 2>&1; then
+    ok "steer-agent installed to ~/.local"
+    USER_LOCAL_INSTALL=1
+  else
+    die "Installation failed. Ask an admin to run: sudo bash install.sh"
   fi
 fi
 
@@ -233,12 +261,22 @@ fi
 
 # ── 7. Create stable symlinks so steer-agent works across nvm versions ───────
 echo ""
-NPM_BIN="$(npm prefix -g)/bin"
+if [[ "$USER_LOCAL_INSTALL" -eq 1 ]]; then
+  NPM_BIN="${HOME}/.local/bin"
+else
+  NPM_BIN="$(npm prefix -g)/bin"
+fi
 STEER_BIN="${NPM_BIN}/steer-agent"
-STABLE_DIRS=("/usr/local/bin" "${HOME}/.local/bin")
+
+if [[ "$HAS_SUDO" -eq 1 ]]; then
+  STABLE_DIRS=("/usr/local/bin" "${HOME}/.local/bin")
+else
+  STABLE_DIRS=("${HOME}/.local/bin")
+fi
 
 if [[ -f "$STEER_BIN" ]]; then
   for dir in "${STABLE_DIRS[@]}"; do
+    mkdir -p "$dir" 2>/dev/null || true
     if [[ -d "$dir" ]] && [[ -w "$dir" ]]; then
       for cmd in steer-agent steer-mcp steer-hook-prompt; do
         src="${NPM_BIN}/${cmd}"
@@ -247,8 +285,7 @@ if [[ -f "$STEER_BIN" ]]; then
       done
       ok "Symlinks created in ${dir} (works across nvm versions)"
       break
-    elif [[ -d "$dir" ]]; then
-      # Need sudo
+    elif [[ -d "$dir" ]] && [[ "$HAS_SUDO" -eq 1 ]]; then
       for cmd in steer-agent steer-mcp steer-hook-prompt; do
         src="${NPM_BIN}/${cmd}"
         [[ -f "$src" ]] && sudo ln -sf "$src" "${dir}/${cmd}" 2>/dev/null && true
@@ -266,11 +303,11 @@ if command -v steer-agent &>/dev/null; then
   ok "steer-agent ${VERSION} is ready"
 elif [[ -f "$STEER_BIN" ]]; then
   ok "steer-agent installed at: ${STEER_BIN}"
-  warn "Not in PATH. Add this to your shell profile and restart:"
+  warn "Not in PATH. Add this to your shell profile (~/.bashrc, ~/.zshrc) and restart:"
   warn "  export PATH=\"${NPM_BIN}:\$PATH\""
 else
   warn "steer-agent not found after install."
-  warn "Add npm global bin to PATH and restart your shell:"
+  warn "Add this to your shell profile (~/.bashrc, ~/.zshrc) and restart:"
   warn "  export PATH=\"${NPM_BIN}:\$PATH\""
 fi
 
