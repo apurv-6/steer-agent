@@ -4,16 +4,20 @@
   "description": "AI Workflow Governance — MCP Server + CLI for Claude Code",
   "author": "Apurv Singh <apurv.singh@coinswitch.co>",
   "license": "UNLICENSED",
-  "type": "module",
   "bin": {
     "steer-agent":       "./dist/index.js",
     "steer-mcp":         "./dist/mcp-entry.js",
     "steer-hook-prompt": "./dist/hooks/prompt-submit.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "skills", "extension", "postinstall.cjs"],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "node scripts/prepare-skills.cjs",
+    "postinstall": "node postinstall.cjs"
+  },
+  "dependencies": {
+    "fs-extra": "^11.3.3"
   },
   "devDependencies": {
     "@steer-agent-tool/core": "*",
