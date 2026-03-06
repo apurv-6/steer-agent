@@ -132,13 +132,25 @@ fi
 
 # ── 7. Verify installation ────────────────────────────────────────────────────
 echo ""
+NPM_BIN="$(npm prefix -g)/bin"
+STEER_BIN="${NPM_BIN}/steer-agent"
+
 if command -v steer-agent &>/dev/null; then
   VERSION="$(steer-agent --version 2>/dev/null || echo 'unknown')"
   ok "steer-agent ${VERSION} is ready"
+elif [[ -f "$STEER_BIN" ]]; then
+  ok "steer-agent installed at: ${STEER_BIN}"
+  warn "Not in PATH. Add this to your ~/.zshrc or ~/.bashrc and restart your shell:"
+  warn "  export PATH=\"${NPM_BIN}:\$PATH\""
+  if [[ -n "${NVM_DIR:-}" ]]; then
+    warn ""
+    warn "  (nvm detected) You may also need: nvm use $(node -v | tr -d v)"
+    warn "  or add steer-agent to your default nvm version."
+  fi
 else
-  warn "steer-agent not found in PATH after install."
+  warn "steer-agent not found after install."
   warn "Add npm global bin to PATH and restart your shell:"
-  warn "  export PATH=\"\$(npm root -g)/../bin:\$PATH\""
+  warn "  export PATH=\"${NPM_BIN}:\$PATH\""
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
