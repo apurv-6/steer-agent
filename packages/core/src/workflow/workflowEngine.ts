@@ -420,6 +420,7 @@ export function verify(
       score: state.score,
       completedFirstRound: state.round === 1,
       overrideUsed: state.overrideUsed,
+      fpcr: state.round <= 1 && !state.overrideUsed,
       impactRisk: state.impactPreview?.riskLevel,
       resumed: !!state.suspendedStep,
       completedAt: now(),

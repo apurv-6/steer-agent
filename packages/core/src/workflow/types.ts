@@ -138,6 +138,7 @@ export interface TaskHistoryEntry {
   score?: number;
   completedFirstRound: boolean;
   overrideUsed: boolean;
+  fpcr: boolean;
   impactRisk?: string;
   resumed: boolean;
   completedAt: string;

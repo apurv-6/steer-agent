@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, steerDirExists } from "@steer-agent-tool/core";
+import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, completeTask, steerDirExists } from "@steer-agent-tool/core";
 
 export const LearnSchema = {
   taskId: z.string().describe("Task ID to extract learnings from"),
@@ -39,7 +39,12 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
 
     // Transition to learning step
     state.learningNotes = learnings;
-    const updated = transitionStep(state, "learning");
+    let updated = transitionStep(state, "learning");
+
+    // Complete the task: write history entry with FPCR and transition to done
+    const historyEntry = completeTask(updated, cwd);
+    updated = transitionStep(updated, "done");
+    updated.resumable = false;
     writeFileSync(statePath, JSON.stringify(updated, null, 2));
 
     return {
@@ -47,6 +52,8 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
         type: "text" as const,
         text: JSON.stringify({
           taskId: args.taskId,
+          status: "done",
+          fpcr: historyEntry.fpcr,
           learnings: learnings.length,
           modules: [...byModule.keys()],
           entries: learnings.map((l: any) => ({ category: l.category, summary: l.summary, module: l.module })),
