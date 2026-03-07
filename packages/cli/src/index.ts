@@ -29,6 +29,9 @@ void (async () => {
     case "mcp":
       await runMcp();
       break;
+    case "workflow":
+      await runWorkflowCmd(rest);
+      break;
     case "metrics":
       await runMetricsCmd();
       break;
@@ -89,6 +92,11 @@ async function runUninstallCmd(argv: string[]): Promise<void> {
   await runUninstall(argv);
 }
 
+async function runWorkflowCmd(argv: string[]): Promise<void> {
+  const { runWorkflow } = await import("./workflow.js");
+  await runWorkflow(argv);
+}
+
 async function runMetricsCmd(): Promise<void> {
   const { runMetrics } = await import("./metrics.js");
   await runMetrics();
@@ -107,6 +115,7 @@ Usage:
   steer-agent uninstall        Remove global components (keeps project data)
   steer-agent steer            Interactive prompt scoring (CLI)
   steer-agent mcp              Start the MCP server (stdio)
+  steer-agent workflow <cmd>   Run workflow steps (start, plan, execute, verify, learn, status, run)
   steer-agent version          Print version
   steer-agent --version        Print version
 

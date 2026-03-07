@@ -128,44 +128,24 @@ try {
   // Best-effort — never block the hook
 }
 
-// Build output
-let hookOutput;
+// Build output — never block, always warn with follow-up questions
+const questions = gateResult.followupQuestions
+  .map((q, i) => `  ${i + 1}. ${q.question}`)
+  .join("\n");
 
-if (gateResult.status === "BLOCKED") {
-  const questions = gateResult.followupQuestions
-    .map((q, i) => `  ${i + 1}. ${q.question}`)
-    .join("\n");
+const scoreLine = `[Steer] Score: ${gateResult.score}/10 | ${gateResult.modelSuggestion.tier.toUpperCase()} | ~$${gateResult.costEstimate.estimatedCostUsd.toFixed(4)}`;
+const parts = [scoreLine];
 
-  hookOutput = {
-    continue: false,
-    user_message: [
-      `[Steer BLOCKED] Score: ${gateResult.score}/10`,
-      `Missing: ${gateResult.missing.join(", ")}`,
-      "",
-      "Add these sections to your prompt:",
-      ...gateResult.missing.map((m) => `  ## ${m}`),
-      questions ? `\nAnswer these:\n${questions}` : "",
-      "",
-      "Use /steer in chat to iterate.",
-    ].filter(Boolean).join("\n"),
-  };
-} else if (gateResult.status === "NEEDS_INFO") {
-  const questions = gateResult.followupQuestions
-    .map((q, i) => `  ${i + 1}. ${q.question}`)
-    .join("\n");
-
-  hookOutput = {
-    continue: true,
-    user_message: [
-      `[Steer] Score: ${gateResult.score}/10 | ${gateResult.modelSuggestion.tier.toUpperCase()} | ~$${gateResult.costEstimate.estimatedCostUsd.toFixed(4)}`,
-      questions ? `Consider:\n${questions}` : "",
-    ].filter(Boolean).join("\n"),
-  };
-} else {
-  hookOutput = {
-    continue: true,
-    user_message: `[Steer] Score: ${gateResult.score}/10 | ${gateResult.modelSuggestion.tier.toUpperCase()} | ~$${gateResult.costEstimate.estimatedCostUsd.toFixed(4)}`,
-  };
+if (gateResult.missing.length > 0) {
+  parts.push(`Missing: ${gateResult.missing.join(", ")}`);
 }
+if (questions) {
+  parts.push(`Follow-up:\n${questions}`);
+}
+
+const hookOutput = {
+  continue: true,
+  user_message: parts.join("\n"),
+};
 
 process.stdout.write(JSON.stringify(hookOutput));

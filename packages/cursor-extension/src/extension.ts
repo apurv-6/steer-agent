@@ -3,19 +3,16 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { VERSION, telemetry } from "@steer-agent-tool/core";
 import { SessionState, type GateMode } from "./SessionState";
-// import { WizardPanel } from "./WizardPanel";
 import { callGate, type GateResult } from "./gateClient";
 import { SidebarProvider } from "./panels/sidebar";
 import { registerBridgeCommands } from "./command-bridge";
 import { registerAnnotations } from "./annotations";
 
 let sessionState: SessionState;
-// let wizardPanel: WizardPanel;
 let telemetryPath: string;
 
 export function activate(context: vscode.ExtensionContext) {
   sessionState = new SessionState(context.workspaceState);
-  // wizardPanel = new WizardPanel(sessionState);
 
   // Set up telemetry path in extension global storage
   const telemetryDir = context.globalStorageUri.fsPath;
@@ -102,9 +99,6 @@ export function activate(context: vscode.ExtensionContext) {
       // Telemetry (best-effort, never crashes)
       appendTelemetry(gateResult, sessionState.data.mode);
 
-      // wizardPanel.setDraftPrompt(request.prompt);
-      // wizardPanel.updateGateResult(gateResult);
-
       // Stream results inline
       const statusEmoji = gateResult.status === "READY" ? "\u2705" : gateResult.status === "NEEDS_INFO" ? "\u26a0\ufe0f" : "\ud83d\udeab";
       stream.markdown(`### ${statusEmoji} ${gateResult.status} \u2014 Score: ${gateResult.score}/10\n\n`);
@@ -145,7 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
   // steeragent.enable — pick mode and enable
   context.subscriptions.push(
     vscode.commands.registerCommand("steeragent.enable", async () => {
-      const modes: GateMode[] = ["dev", "debug", "bugfix", "design", "refactor"];
+      const modes: GateMode[] = ["dev", "debug", "bugfix", "design", "refactor", "feature"];
       const picked = await vscode.window.showQuickPick(modes, {
         placeHolder: "Select steer mode",
       });
@@ -233,9 +227,6 @@ export function activate(context: vscode.ExtensionContext) {
       // Telemetry (best-effort, never crashes)
       appendTelemetry(gateResult, sessionState.data.mode);
 
-      // wizardPanel.setDraftPrompt(draftPrompt);
-      // wizardPanel.updateGateResult(gateResult);
-
       if (gateResult.status === "BLOCKED") {
         vscode.window.showWarningMessage(`BLOCKED (score ${gateResult.score}/10). Missing: ${gateResult.missing.join(", ")}. Check Wizard panel.`);
       } else if (gateResult.status === "NEEDS_INFO") {
@@ -270,7 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
   // steeragent.applyToChat
   context.subscriptions.push(
     vscode.commands.registerCommand("steeragent.applyToChat", async () => {
-      // Use last patched prompt from session state (WizardPanel removed in v2)
+      // Use last patched prompt from session state
       const patchedPrompt = sessionState.data.lastPatchedPrompt;
       if (!patchedPrompt) {
         vscode.window.showWarningMessage("No gate result. Run 'Steer Agent: Suggest' first.");
@@ -362,9 +353,6 @@ export function activate(context: vscode.ExtensionContext) {
 
       context.workspaceState.update("steer.turnId", turnId);
       context.workspaceState.update("steer.gateCallCount", sessionState.data.gateCallCount);
-
-      // wizardPanel.setDraftPrompt(bridge.draftPrompt);
-      // wizardPanel.updateGateResult(gr);
 
       appendTelemetry(gr, bridge.mode);
     } catch {

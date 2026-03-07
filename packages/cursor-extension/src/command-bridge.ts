@@ -1,9 +1,7 @@
 import * as vscode from "vscode";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import { startTask as coreStartTask } from "@steer-agent-tool/core";
-
-const execAsync = promisify(exec);
+import { startTask as coreStartTask, buildCodebaseMap } from "@steer-agent-tool/core";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Bridge between VS Code commands and MCP server.
@@ -58,8 +56,12 @@ export function registerBridgeCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("steeragent.rebuildMap", async () => {
       vscode.window.showInformationMessage("Rebuilding codebase map...");
       try {
-        await execAsync(`npx steer-agent-tool map --rebuild`, { cwd, timeout: 30000 });
-        vscode.window.showInformationMessage("Codebase map rebuilt.");
+        const map = await buildCodebaseMap(cwd);
+        const mapPath = join(cwd, ".steer", "codebase-map.json");
+        writeFileSync(mapPath, JSON.stringify(map, null, 2));
+        vscode.window.showInformationMessage(
+          `Codebase map rebuilt: ${Object.keys(map.modules).length} modules, ${Object.keys(map.files).length} files.`,
+        );
       } catch (err: any) {
         vscode.window.showErrorMessage(`Map rebuild failed: ${err.message}`);
       }

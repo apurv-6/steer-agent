@@ -57,6 +57,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _refreshTimer?: ReturnType<typeof setTimeout>;
   private _sessionDisposable?: vscode.Disposable;
   private _expandedModules: Set<string> = new Set();
+  private _pollTimer?: ReturnType<typeof setInterval>;
+  private _lastTaskMtime: number = 0;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -107,25 +109,55 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._watchers.push(w);
     }
 
-    // Subscribe to SessionState changes
+    // Subscribe to SessionState changes — reload task data (not just refresh)
     if (this._sessionState) {
-      this._sessionDisposable = this._sessionState.onDidChange(() => this.debouncedRefresh());
+      this._sessionDisposable = this._sessionState.onDidChange(() => this.loadTaskState());
     }
 
     this.loadTaskState();
     this.refresh();
+
+    // Poll task file every 2s as fallback for missed watcher events
+    // (VS Code watchers can miss or delay changes from external processes)
+    this._pollTimer = setInterval(() => this.pollTaskState(), 2000);
+  }
+
+  private getTaskPath(): string | null {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders?.length) return null;
+    return vscode.Uri.joinPath(folders[0].uri, ".steer", "state", "current-task.json").fsPath;
   }
 
   private loadTaskState(): void {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders?.length) return;
-    const taskPath = vscode.Uri.joinPath(folders[0].uri, ".steer", "state", "current-task.json").fsPath;
+    const taskPath = this.getTaskPath();
+    if (!taskPath) return;
     try {
+      const stat = fs.statSync(taskPath);
+      this._lastTaskMtime = stat.mtimeMs;
       this._taskData = JSON.parse(fs.readFileSync(taskPath, "utf-8"));
     } catch {
       this._taskData = null;
     }
     this.refresh();
+  }
+
+  /** Poll-based fallback: reload only when mtime changes. */
+  private pollTaskState(): void {
+    const taskPath = this.getTaskPath();
+    if (!taskPath) return;
+    try {
+      const stat = fs.statSync(taskPath);
+      if (stat.mtimeMs !== this._lastTaskMtime) {
+        this.loadTaskState();
+      }
+    } catch {
+      // File may not exist yet — ignore
+      if (this._taskData !== null) {
+        this._taskData = null;
+        this._lastTaskMtime = 0;
+        this.refresh();
+      }
+    }
   }
 
   private debouncedRefresh(): void {
@@ -997,11 +1029,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <button onclick="runCommand('steeragent.rebuildMap')" style="padding:6px 12px;border-radius:4px;background:${C.surface};border:1px solid ${C.border};color:${C.textDim};font-size:10px;cursor:pointer;font-family:inherit">Rebuild Map</button>
       </div>`);
 
-    } catch {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       parts.push(`<div class="card" style="text-align:center;padding:20px">
         <div style="color:${C.textDim};margin-bottom:8px">${ICONS.layers}</div>
         <div style="font-size:11px;font-weight:600;color:${C.text}">No codebase map</div>
         <div style="font-size:10px;color:${C.textDim};margin:6px 0">Run steer.map to generate the codebase index</div>
+        <div style="font-size:9px;color:${C.red};margin:4px 0;word-break:break-all">${this.esc(errMsg)}</div>
         <button onclick="runCommand('steeragent.rebuildMap')" style="margin-top:8px;padding:6px 12px;border-radius:4px;background:${C.accent};border:none;color:${C.bgAlt};font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">
           ${ICONS.play} Build Map
         </button>
@@ -1023,5 +1057,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._watchers = [];
     this._sessionDisposable?.dispose();
     if (this._refreshTimer) clearTimeout(this._refreshTimer);
+    if (this._pollTimer) clearInterval(this._pollTimer);
   }
 }

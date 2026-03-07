@@ -113,7 +113,11 @@ Mode: [mode] | Files: [inferred files]
 Ready? (yes / pick a different task / need more context)
 ```
 
-After the user confirms, call `mcp__steer__steer_start` with the inferred mode and task ID.
+After the user confirms, run the CLI command via Bash to start the task:
+```
+steer-agent workflow start --mode=<inferred_mode> --task-id=<generated_id> --message="<task_text>"
+```
+Generate the task ID as: `task_<timestamp>_<random>` (e.g., `task_abc123_xyz789`).
 
 ---
 
@@ -121,9 +125,13 @@ After the user confirms, call `mcp__steer__steer_start` with the inferred mode a
 
 Now that you have the task (from spec parsing or direct input):
 
-1. Call `mcp__steer__steer_start` with the inferred `mode` and a generated `taskId`
-2. Present the result's context to the user (rules, codebase summary, similar past tasks)
-3. If the MCP tool returns `initialQuestions`, only surface them if the info is GENUINELY missing — never ask for something the user already provided
+1. Run the CLI command via Bash to start the task and gather context:
+   ```
+   steer-agent workflow start --mode=<mode> --task-id=<generated_id> --message="<goal>"
+   ```
+   Generate the task ID as: `task_<timestamp>_<random>` (e.g., `task_abc123_xyz789`).
+2. Parse the JSON output and present the context to the user (rules, codebase summary, similar past tasks)
+3. If the output includes `initialQuestions`, only surface them if the info is GENUINELY missing — never ask for something the user already provided
 
 ---
 

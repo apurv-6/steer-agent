@@ -10,3 +10,7 @@ data/
 .env
 .env.*
 .planning/
+
+# SteerAgent runtime state
+.steer/state/
+.steer/embeddings/

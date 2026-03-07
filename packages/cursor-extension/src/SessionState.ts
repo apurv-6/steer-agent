@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-export type GateMode = "dev" | "debug" | "bugfix" | "design" | "refactor";
+export type GateMode = "dev" | "debug" | "bugfix" | "design" | "refactor" | "feature";
 
 export interface SessionStateData {
   steerEnabled: boolean;
