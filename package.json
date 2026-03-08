@@ -1,6 +1,10 @@
 {
   "name": "steer-agent-tool",
+  "version": "0.2.0",
   "private": true,
+  "bin": {
+    "steer-agent-tool": "./packages/cli/dist/index.js"
+  },
   "workspaces": [
     "packages/*"
   ],

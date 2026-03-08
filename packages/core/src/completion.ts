@@ -9,7 +9,7 @@ export interface HistoryEntry {
   completedAt: string;
   durationMs: number;
   round: number;
-  files: number;
+  files: string[];
   modelTier: string;
   reflectionPassed: boolean;
   verificationPassed: boolean;
@@ -36,9 +36,9 @@ export function completeTask(state: TaskState, cwd: string): HistoryEntry {
     completedAt,
     durationMs,
     round: state.round,
-    files: state.files.length,
+    files: state.files,
     modelTier: state.modelTier ?? "small",
-    reflectionPassed: state.reflectionPassed ?? true,
+    reflectionPassed: state.reflectionPassed ?? false,
     verificationPassed: state.verificationOutcome?.passed ?? false,
     learnings: state.learningNotes.length,
     fpcr: !state.overrideUsed && state.round <= 1,

@@ -23,7 +23,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { gate } from "./gate.js";
-import { VERSION } from "@steer-agent-tool/core";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
+import { VERSION, logToolCall } from "@steer-agent-tool/core";
 import { InitSchema, handleInit } from "./tools/init.js";
 import { StartSchema, handleStart } from "./tools/start.js";
 import { PlanSchema, handlePlan } from "./tools/plan.js";
@@ -63,6 +65,9 @@ async function handleGate(args: {
   criticalPaths?: string[];
 }) {
   try {
+    const cwd = process.cwd();
+    try { logToolCall("steer.gate", { taskId: args.taskId, mode: args.mode, promptLen: args.draftPrompt.length }, cwd); } catch {}
+
     const result = gate({
       draftPrompt: args.draftPrompt,
       mode: args.mode as "dev" | "debug" | "bugfix" | "design" | "refactor",
@@ -73,6 +78,19 @@ async function handleGate(args: {
       gitDiffNameOnly: args.gitDiffNameOnly,
       criticalPaths: args.criticalPaths,
     });
+
+    try { logToolCall("steer.gate.done", { taskId: result.taskId, score: result.score, status: result.status, model: result.modelSuggestion?.tier, cost: result.costEstimate?.estimatedCostUsd }, cwd); } catch {}
+
+    // Persist modelTier to task state so history records the actual routed model
+    try {
+      const statePath = join(cwd, ".steer", "state", "current-task.json");
+      if (existsSync(statePath) && result.modelSuggestion?.tier) {
+        const state = JSON.parse(readFileSync(statePath, "utf-8"));
+        state.modelTier = result.modelSuggestion.tier;
+        writeFileSync(statePath, JSON.stringify(state, null, 2));
+      }
+    } catch {}
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
     };

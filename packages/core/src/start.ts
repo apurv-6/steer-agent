@@ -1,12 +1,14 @@
 import fs from "fs-extra";
 import path from "path";
-import yaml from "yaml";
 import { Mode, CodebaseMap, KnowledgeEntry, SimilarTask } from "./types.js";
 import { createNewTask } from "./state.js";
 import { extractFileRefs } from "./extractFileRefs.js";
 import { loadHooks, runHooks } from "./hookRunner.js";
 import { loadModuleKnowledge, loadGlobalKnowledge } from "./knowledgeLoader.js";
 import { findSimilarTasks } from "./similarTasks.js";
+import { loadIndex } from "./rag/indexer.js";
+import { searchChunks } from "./rag/retriever.js";
+import { logSteer } from "./logger.js";
 import { exec } from "child_process";
 import util from "util";
 
@@ -56,7 +58,7 @@ export async function startTask(options: StartOptions) {
 
   if (parts.length >= 3) {
       try {
-          frontmatter = yaml.parse(parts[1]);
+          frontmatter = parseSimpleYaml(parts[1]);
           templateBody = parts.slice(2).join("---");
       } catch (e) {
           console.warn("Failed to parse frontmatter:", e);
@@ -117,6 +119,26 @@ export async function startTask(options: StartOptions) {
   // 5b. Find similar past tasks
   const similarTasks: SimilarTask[] = findSimilarTasks(mode, resolvedFileList, initialMessage, cwd);
 
+  // 5c. RAG: retrieve relevant code chunks
+  let ragResults: { file: string; score: number; keywords: string[]; preview: string }[] = [];
+  try {
+    const ragIndex = loadIndex(cwd);
+    if (ragIndex && initialMessage) {
+      const chunks = searchChunks(initialMessage, ragIndex, 8);
+      ragResults = chunks.map(r => ({
+        file: r.chunk.file,
+        score: r.score,
+        keywords: r.matchedKeywords,
+        preview: r.chunk.content.substring(0, 150),
+      }));
+      if (ragResults.length > 0) {
+        logSteer(`RAG retrieved ${ragResults.length} chunks: ${ragResults.map(r => `${r.file}(${r.score.toFixed(1)})`).join(", ")}`, cwd);
+      }
+    }
+  } catch {
+    // RAG failure is non-fatal
+  }
+
   const context = {
     rules,
     codemapSummary: codemap ? `Root: ${codemap.root}, Modules: ${Object.keys(codemap.modules).length}, Files: ${Object.keys(codemap.files).length}` : "No map",
@@ -125,6 +147,7 @@ export async function startTask(options: StartOptions) {
     knowledge,
     globalKnowledge,
     similarTasks,
+    ragResults,
     template: {
       frontmatter,
       body: templateBody
@@ -139,6 +162,7 @@ export async function startTask(options: StartOptions) {
   if (gitContext) state.sourcesUsed.push("git");
   if (knowledge.length > 0) state.sourcesUsed.push("knowledge");
   if (similarTasks.length > 0) state.sourcesUsed.push("similar_tasks");
+  if (ragResults.length > 0) state.sourcesUsed.push("rag");
 
   // Run post-context hooks
   const postContextResults = runHooks("post-context", hooks, cwd);
@@ -188,6 +212,29 @@ function generateInitialQuestions(frontmatter: any, templateBody: string) {
     type: "text",
     required: true,
   }));
+}
+
+/** Minimal YAML parser for template frontmatter (key: value and [array] fields only). */
+function parseSimpleYaml(text: string): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let val: any = trimmed.slice(idx + 1).trim();
+    // Parse inline arrays: [a, b, c]
+    if (val.startsWith("[") && val.endsWith("]")) {
+      val = val.slice(1, -1).split(",").map((s: string) => s.trim()).filter(Boolean);
+    } else if (val === "true") {
+      val = true;
+    } else if (val === "false") {
+      val = false;
+    }
+    result[key] = val;
+  }
+  return result;
 }
 
 function deriveAffectedModules(files: string[], codemap: CodebaseMap | null): string[] {

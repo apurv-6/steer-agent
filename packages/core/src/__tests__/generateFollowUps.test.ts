@@ -10,16 +10,22 @@ describe("generateFollowUps", () => {
     expect(followUps[0].type).toBe("open");
   });
 
-  it("asks scope question when LIMITS is missing", () => {
+  it("asks scope question as MCQ when LIMITS is missing", () => {
     const result: ScoreResult = { score: 6, missing: ["LIMITS", "REVIEW"], vagueFlags: [], fileRefs: [] };
     const followUps = generateFollowUps(result);
-    expect(followUps.some((f) => f.question.includes("constraints") || f.question.includes("scope"))).toBe(true);
+    const limitsQ = followUps.find((f) => f.question.includes("scope"));
+    expect(limitsQ).toBeDefined();
+    expect(limitsQ!.type).toBe("mcq");
+    expect(limitsQ!.options).toContain("Only referenced files");
   });
 
-  it("asks verification question when REVIEW is missing", () => {
+  it("asks verification question as MCQ when REVIEW is missing", () => {
     const result: ScoreResult = { score: 8, missing: ["REVIEW"], vagueFlags: [], fileRefs: [] };
     const followUps = generateFollowUps(result);
-    expect(followUps.some((f) => f.question.includes("verified") || f.question.includes("tested"))).toBe(true);
+    const reviewQ = followUps.find((f) => f.question.includes("verified"));
+    expect(reviewQ).toBeDefined();
+    expect(reviewQ!.type).toBe("mcq");
+    expect(reviewQ!.options).toContain("Run existing tests");
   });
 
   it("asks file-scope MCQ when fileRefs exist", () => {
@@ -31,10 +37,13 @@ describe("generateFollowUps", () => {
     expect(mcq!.options).toContain("Not sure");
   });
 
-  it("asks for repro steps in bugfix mode when REVIEW is missing", () => {
+  it("asks for repro steps as MCQ in bugfix mode when REVIEW is missing", () => {
     const result: ScoreResult = { score: 6, missing: ["REVIEW"], vagueFlags: [], fileRefs: [] };
     const followUps = generateFollowUps(result, "bugfix");
-    expect(followUps.some((f) => f.question.includes("repro steps") || f.question.includes("error logs"))).toBe(true);
+    const reproQ = followUps.find((f) => f.question.includes("repro steps") || f.question.includes("error logs"));
+    expect(reproQ).toBeDefined();
+    expect(reproQ!.type).toBe("mcq");
+    expect(reproQ!.options).toContain("Yes, have repro steps");
   });
 
   it("returns at most 3 questions", () => {

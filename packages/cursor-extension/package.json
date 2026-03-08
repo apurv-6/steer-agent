@@ -94,14 +94,20 @@
   "scripts": {
     "build": "node esbuild.js",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository"
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository",
+    "test": "vitest run",
+    "test:integration": "node dist/test/runTests.js"
   },
   "dependencies": {
     "@steer-agent-tool/core": "*"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "2.21.1",
-    "esbuild": "^0.27.3"
+    "esbuild": "^0.27.3",
+    "mocha": "^11.7.5",
+    "vitest": "^3.2.4"
   }
 }

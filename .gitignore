@@ -14,3 +14,7 @@ data/
 # SteerAgent runtime state
 .steer/state/
 .steer/embeddings/
+
+# Claude Code local settings (contains machine-specific paths and permissions)
+.claude/settings.json
+.claude/settings.local.json

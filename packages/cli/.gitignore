@@ -1,4 +1,7 @@
 dist/
-skills/
 extension/
 *.tgz
+
+# SteerAgent runtime state
+.steer/state/
+.steer/embeddings/

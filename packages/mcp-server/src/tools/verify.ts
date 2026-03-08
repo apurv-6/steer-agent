@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runVerification, loadHooks, transitionStep, steerDirExists } from "@steer-agent-tool/core";
+import { runVerification, loadHooks, transitionStep, steerDirExists, logToolCall } from "@steer-agent-tool/core";
 
 export const VerifySchema = {
   taskId: z.string().describe("Task ID to verify"),
@@ -22,10 +22,20 @@ export async function handleVerify(args: { taskId: string; cwd?: string }) {
     const state = JSON.parse(readFileSync(statePath, "utf-8"));
     const hooks = loadHooks(cwd);
 
+    try { logToolCall("steer.verify", { taskId: args.taskId }, cwd); } catch {}
+
     const result = runVerification(state, hooks, cwd);
 
+    try { logToolCall("steer.verify.done", { taskId: args.taskId, passed: result?.passed, checks: result?.checks?.length }, cwd); } catch {}
+
     state.verificationOutcome = result;
-    const updated = transitionStep(state, "verification");
+
+    // Transition through reflection step (handled implicitly by Claude) then to verification
+    let current = state;
+    if (current.currentStep === "execution") {
+      current = transitionStep(current, "reflection");
+    }
+    const updated = transitionStep(current, "verification");
     writeFileSync(statePath, JSON.stringify(updated, null, 2));
 
     return {

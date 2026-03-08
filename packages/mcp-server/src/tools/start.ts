@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { startTask, Mode, steerDirExists } from "@steer-agent-tool/core";
+import { startTask, Mode, steerDirExists, logToolCall } from "@steer-agent-tool/core";
 
 export const StartSchema = {
   mode: z.enum(["chat", "code", "review", "plan", "design", "bugfix", "debug", "feature", "refactor"]).describe("The mode for the task"),
@@ -18,12 +18,17 @@ export async function handleStart(args: { mode: string, taskId: string, initialM
       };
     }
 
+    try { logToolCall("steer.start", { taskId: args.taskId, mode: args.mode }, cwd); } catch {}
+
     const result = await startTask({
       cwd,
       mode: args.mode as Mode,
       taskId: args.taskId,
       initialMessage: args.initialMessage
     });
+
+    const responseSize = JSON.stringify(result).length;
+    try { logToolCall("steer.start.done", { taskId: args.taskId, responseChars: responseSize }, cwd); } catch {}
 
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

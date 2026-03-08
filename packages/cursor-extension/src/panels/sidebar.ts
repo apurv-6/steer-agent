@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { SessionState } from "../SessionState";
 
-export type SidebarTab = "task" | "knowledge" | "fpcr" | "map" | "rules";
+export type SidebarTab = "task" | "knowledge" | "fpcr" | "map" | "rules" | "log";
 
 // ─── Design Tokens (Catppuccin-inspired) ───────────
 const C = {
@@ -96,6 +96,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       "**/.steer/codebase-map.json",
       "**/.steer/RULES.md",
       "**/.steer/hooks.yaml",
+      "**/.steer/state/steer.log",
     ];
 
     for (const pattern of watchPatterns) {
@@ -350,6 +351,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         ${this.renderTabButton("fpcr", ICONS.chart, "FPCR")}
         ${this.renderTabButton("map", ICONS.layers, "MAP")}
         ${this.renderTabButton("rules", ICONS.shield, "RULES")}
+        ${this.renderTabButton("log", ICONS.code, "LOG")}
       </div>
 
       <!-- Content -->
@@ -444,8 +446,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private getModelLabel(tier: string): string {
-    const map: Record<string, string> = { high: "Opus 4", mid: "Sonnet 4", small: "Haiku 4" };
-    return map[tier.toLowerCase()] || tier;
+    return tier;
   }
 
   private esc(s: string): string {
@@ -477,16 +478,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   // ─── Model Tag HTML ────────────────────────────
   private modelTag(tier: string | null, reason?: string): string {
-    const m: Record<string, { label: string; color: string; desc: string }> = {
-      high: { label: "Opus 4", color: C.purple, desc: "Critical / Complex" },
-      mid: { label: "Sonnet 4", color: C.blue, desc: "Standard Tasks" },
-      small: { label: "Haiku 4", color: C.teal, desc: "Quick / Simple" },
-    };
-    const cfg = (tier ? m[tier.toLowerCase()] : null) || { label: "Not set", color: C.textDim, desc: "Pending" };
-    const desc = reason ? this.esc(reason) : cfg.desc;
+    const normalized = this.normalizeTier(tier);
+    const colors: Record<string, string> = { high: C.purple, mid: C.blue, small: C.teal };
+    const descs: Record<string, string> = { high: "Critical / Complex", mid: "Standard Tasks", small: "Quick / Simple" };
+    const color = (normalized ? colors[normalized] : null) || C.textDim;
+    const desc = reason ? this.esc(reason) : (normalized ? descs[normalized] : "Pending");
+    const label = tier ? this.esc(tier) : "Not set";
     return `<div style="display:flex;align-items:center;gap:6px">
-      <div style="width:8px;height:8px;border-radius:50%;background:${cfg.color};box-shadow:0 0 6px ${cfg.color}66"></div>
-      <span style="font-size:11px;font-weight:600;color:${cfg.color}">${cfg.label}</span>
+      <div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color}66"></div>
+      <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
       <span style="font-size:9px;color:${C.textDim}">${desc}</span>
     </div>`;
   }
@@ -499,6 +499,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case "fpcr": return this.renderFpcrTab();
       case "map": return this.renderMapTab();
       case "rules": return this.renderRulesTab();
+      case "log": return this.renderLogTab();
       default: return "";
     }
   }
@@ -543,7 +544,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         ${this.esc(t.goal || t.mode || "Task in progress")}
       </p>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        ${this.modelTag(modelTier, t.modelReason)}
+        ${this.modelTag(rawTier ?? null, t.modelReason)}
         ${elapsed ? `<span style="font-size:9px;color:${C.textDim};margin-left:auto;display:flex;align-items:center;gap:4px">${ICONS.clock} ${elapsed}</span>` : ""}
       </div>
     </div>`;
@@ -785,19 +786,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders?.length) return this.emptyState("No workspace open");
 
+    // ── Gather data ──
     const historyPath = vscode.Uri.joinPath(folders[0].uri, ".steer", "state", "history.jsonl").fsPath;
     let records: any[] = [];
     try {
       const raw = fs.readFileSync(historyPath, "utf-8");
       records = raw.trim().split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
-    } catch {
-      // No history yet
-    }
+    } catch {}
 
-    const totalTasks = records.length;
-    const fpcrTasks = records.filter((r: any) => r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed");
-    const fpcr = totalTasks > 0 ? ((fpcrTasks.length / totalTasks) * 100).toFixed(1) : "—";
-    const avgRounds = totalTasks > 0 ? (records.reduce((s: number, r: any) => s + ((r.rounds ?? r.round ?? 0) + 1), 0) / totalTasks).toFixed(1) : "—";
+    const logPath = vscode.Uri.joinPath(folders[0].uri, ".steer", "state", "steer.log").fsPath;
+    let logLines: string[] = [];
+    try { logLines = fs.readFileSync(logPath, "utf-8").split("\n"); } catch {}
 
     let kFiles = 0;
     try {
@@ -805,71 +804,267 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       kFiles = fs.readdirSync(dir).filter((f: string) => f.endsWith(".md")).length;
     } catch {}
 
+    // ── Compute metrics ──
+    const isPassed = (r: any) => r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed";
+    const getRounds = (r: any) => (r.rounds ?? r.round ?? 0) + 1;
+    const total = records.length;
+    const passed = records.filter(isPassed).length;
+    const fpcrPct = total > 0 ? (passed / total * 100) : 0;
+    const avgRounds = total > 0 ? records.reduce((s: number, r: any) => s + getRounds(r), 0) / total : 0;
+    const avgDuration = total > 0 ? records.reduce((s: number, r: any) => s + (r.durationMs || 0), 0) / total : 0;
+    const totalFiles = records.reduce((s: number, r: any) => s + (r.files?.length || 0), 0);
+    const totalLearnings = records.reduce((s: number, r: any) => s + (r.learnings || 0), 0);
+
+    // Parse gate scores from steer.log
+    const gateScores: number[] = [];
+    const gateCosts: number[] = [];
+    for (const line of logLines) {
+      if (!line.includes("steer.gate.done")) continue;
+      const sm = line.match(/score=(\d+)/);
+      if (sm) gateScores.push(Math.min(10, Number(sm[1])));
+      const cm = line.match(/cost=([\d.]+)/);
+      if (cm) gateCosts.push(Number(cm[1]));
+    }
+    const avgScore = gateScores.length > 0 ? (gateScores.reduce((a, b) => a + b, 0) / gateScores.length) : 0;
+    const totalCost = gateCosts.reduce((a, b) => a + b, 0);
+
+    // Model distribution from history
+    const models: Record<string, number> = { high: 0, mid: 0, small: 0 };
+    for (const r of records) {
+      const t = String(r.modelTier || "small").toLowerCase();
+      if (t in models) models[t]++;
+      else models["small"]++;
+    }
+    const modelTotal = Object.values(models).reduce((a, b) => a + b, 0);
+    const modelData = [
+      { label: "Opus", key: "high", color: C.purple, count: models.high },
+      { label: "Sonnet", key: "mid", color: C.blue, count: models.mid },
+      { label: "Haiku", key: "small", color: C.teal, count: models.small },
+    ];
+
+    // Weekly FPCR trend (chunks of 5)
+    const weeklyFpcr: number[] = [];
+    for (let i = 0; i < Math.ceil(total / 5); i++) {
+      const chunk = records.slice(i * 5, (i + 1) * 5);
+      if (chunk.length > 0) {
+        const p = chunk.filter(isPassed).length;
+        weeklyFpcr.push(Math.round(p / chunk.length * 100));
+      }
+    }
+
     const parts: string[] = [];
+    const cardStyle = `padding:12px;border-radius:10px;background:${C.surface};border:1px solid ${C.border}`;
+    const sectionLabel = (t: string) => `<div style="font-size:8px;font-weight:700;color:${C.textDim};letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid ${C.border};font-family:monospace">${t}</div>`;
 
-    parts.push(`<div class="section-title">FPCR Telemetry</div>`);
+    // ══════════════════════════════════════════════
+    // ROW 1 — Hero Metrics (2x2)
+    // ══════════════════════════════════════════════
+    parts.push(`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`);
+    parts.push(this.bigMetricCard("North Star", total > 0 ? fpcrPct.toFixed(1) : "—", "%", "FPCR", C.green, "First-Pass Completion Rate"));
+    parts.push(this.bigMetricCard("Efficiency", total > 0 ? avgRounds.toFixed(1) : "—", "×", "Avg Rounds", C.accent, "Target: &lt; 1.5"));
+    parts.push(this.bigMetricCard("Volume", String(total), "", "Tasks Done", C.blue, `${totalFiles} files changed`));
+    parts.push(this.bigMetricCard("Quality", avgScore > 0 ? avgScore.toFixed(1) : "—", "/10", "Gate Score", C.purple, `${gateScores.length} prompts scored`));
+    parts.push(`</div>`);
 
-    // Metric cards row 1
-    parts.push(`<div style="display:flex;gap:6px">
-      ${this.metricCard("First-Pass Rate", fpcr === "—" ? "—" : fpcr, "%", C.green)}
-      ${this.metricCard("Avg Rounds", avgRounds, "", C.blue)}
-    </div>`);
+    // ══════════════════════════════════════════════
+    // ROW 2 — Pass/Fail + Model Donut + Score Bars
+    // ══════════════════════════════════════════════
 
-    // Metric cards row 2
-    parts.push(`<div style="display:flex;gap:6px">
-      ${this.metricCard("Tasks Done", String(totalTasks), "", C.accent)}
-      ${this.metricCard("Knowledge Files", String(kFiles), "", C.purple)}
-    </div>`);
-
-    // Bar chart (last 20)
-    if (records.length > 0) {
+    // Pass/Fail bars
+    if (total > 0) {
       const last20 = records.slice(-20);
-      const getRounds = (r: any) => (r.rounds ?? r.round ?? 0) + 1;
-      const maxRound = Math.max(...last20.map((r: any) => getRounds(r)), 1);
+      const bars = last20.map((r: any, i: number) => {
+        const p = isPassed(r);
+        const opacity = (0.5 + (i / last20.length) * 0.5).toFixed(2);
+        return `<div style="flex:1;height:32px;background:${p ? C.green : C.red};border-radius:3px;opacity:${opacity}" title="${r.taskId}: ${p ? "PASS" : "FAIL"}"></div>`;
+      }).join("");
 
-      const bars = last20.map((r: any) => {
-        const h = Math.max(10, (getRounds(r) / maxRound) * 100);
-        const passed = r.fpcr === true || r.firstPassComplete === true || r.resolution === "passed";
-        const color = passed ? C.green : C.red;
-        const result = passed ? "pass" : "fail";
-        return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
-          <div style="width:100%;border-radius:2px;height:${h}%;background:${color};transition:height 0.4s" title="${r.taskId}: ${getRounds(r)} rounds, ${result}"></div>
+      parts.push(`<div style="${cardStyle}">
+        ${sectionLabel(`Last ${last20.length} Tasks — Pass / Fail`)}
+        <div style="display:flex;gap:3px;align-items:flex-end">${bars}</div>
+        <div style="display:flex;justify-content:center;gap:14px;margin-top:8px">
+          <span style="font-size:9px;color:${C.green}">● Pass (${passed})</span>
+          <span style="font-size:9px;color:${C.red}">● Fail (${total - passed})</span>
+        </div>
+      </div>`);
+    }
+
+    // Model Routing Donut
+    if (modelTotal > 0) {
+      const r = 38, sw = 14, circ = 2 * Math.PI * r;
+      let offset = 0;
+      const slices = modelData.map(d => {
+        const pct = d.count / modelTotal * 100;
+        const dash = circ * pct / 100;
+        const gap = circ - dash;
+        const o = -circ * offset / 100;
+        offset += pct;
+        return `<circle r="${r}" cx="50" cy="50" fill="none" stroke="${d.color}" stroke-width="${sw}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${o}" stroke-linecap="round"/>`;
+      }).join("");
+
+      const legend = modelData.map(d => {
+        const pct = modelTotal > 0 ? Math.round(d.count / modelTotal * 100) : 0;
+        return `<div style="display:flex;align-items:center;gap:5px">
+          <div style="width:8px;height:8px;border-radius:2px;background:${d.color}"></div>
+          <span style="font-size:10px;color:${C.textDim};font-family:monospace">${d.label} <span style="color:${C.text};font-weight:700">${d.count}</span> <span style="color:${C.textMuted}">(${pct}%)</span></span>
         </div>`;
       }).join("");
 
-      parts.push(`<div class="card">
-        <div class="section-title" style="margin-bottom:8px">Last ${last20.length} Tasks</div>
-        <div style="display:flex;align-items:flex-end;gap:2px;height:60px">${bars}</div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px">
-          <span style="color:${C.green}">● pass</span>
-          <span style="color:${C.red}">● fail</span>
+      parts.push(`<div style="${cardStyle}">
+        ${sectionLabel("Model Routing Distribution")}
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px">
+          <svg viewBox="0 0 100 100" width="80" height="80">
+            ${slices}
+            <text x="50" y="47" text-anchor="middle" fill="${C.text}" font-size="14" font-weight="800" font-family="monospace">${modelTotal}</text>
+            <text x="50" y="58" text-anchor="middle" fill="${C.textDim}" font-size="7" font-weight="600">TASKS</text>
+          </svg>
+          <div style="display:flex;flex-direction:column;gap:5px">${legend}</div>
         </div>
       </div>`);
     }
 
-    // Model routing
-    const sessionData = this._sessionState?.data;
-    if (sessionData) {
-      parts.push(`<div class="card">
-        <div class="section-title" style="margin-bottom:6px">Model Routing</div>
-        <div style="display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden">
-          <div style="width:15%;background:${C.purple}" title="Opus 15%"></div>
-          <div style="width:60%;background:${C.blue}" title="Sonnet 60%"></div>
-          <div style="width:25%;background:${C.teal}" title="Haiku 25%"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px">
-          <span style="font-size:8px;color:${C.purple}">● Opus</span>
-          <span style="font-size:8px;color:${C.blue}">● Sonnet</span>
-          <span style="font-size:8px;color:${C.teal}">● Haiku</span>
+    // Gate Score History (actual per-gate scores)
+    if (gateScores.length > 0) {
+      const lastScores = gateScores.slice(-10);
+      const scoreBars = lastScores.map((s, i) => {
+        const pct = Math.min(100, s * 10); // 0-10 → 0-100%
+        const color = s > 6 ? C.green : s > 3 ? C.accent : C.red;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <span style="font-size:7px;color:${C.textDim};font-family:monospace">${s}</span>
+          <div style="width:14px;height:40px;background:${C.border};border-radius:3px;display:flex;align-items:flex-end;overflow:hidden">
+            <div style="width:100%;height:${pct}%;background:${color};border-radius:0 0 3px 3px"></div>
+          </div>
+        </div>`;
+      }).join("");
+
+      parts.push(`<div style="${cardStyle}">
+        ${sectionLabel(`Gate Scores — Last ${lastScores.length}`)}
+        <div style="display:flex;gap:3px;justify-content:center">${scoreBars}</div>
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:6px">
+          <span style="font-size:8px;color:${C.green}">● Ready (&gt;6)</span>
+          <span style="font-size:8px;color:${C.accent}">● Needs Info (4-6)</span>
+          <span style="font-size:8px;color:${C.red}">● Blocked (≤3)</span>
         </div>
       </div>`);
     }
 
-    if (totalTasks === 0) {
-      parts.push(this.emptyState("No completed tasks yet. Complete tasks with steer.verify to start building FPCR metrics."));
+    // ══════════════════════════════════════════════
+    // ROW 3 — FPCR Trend + Operational
+    // ══════════════════════════════════════════════
+
+    // FPCR Trend Line
+    if (weeklyFpcr.length >= 2) {
+      const w = 200, h = 50;
+      const max = Math.max(...weeklyFpcr, 100);
+      const min = Math.min(...weeklyFpcr, 0);
+      const range = max - min || 1;
+      const step = w / (weeklyFpcr.length - 1);
+      const pts = weeklyFpcr.map((v, i) => ({ x: i * step, y: h - ((v - min) / range) * (h - 10) }));
+      const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+      const areaD = `${pathD} L ${pts[pts.length - 1].x} ${h} L 0 ${h} Z`;
+      const dots = pts.map((p, i) => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${C.green}"/><text x="${p.x}" y="${p.y - 7}" text-anchor="middle" fill="${C.green}" font-size="7" font-weight="700" font-family="monospace">${weeklyFpcr[i]}%</text>`).join("");
+      const labels = weeklyFpcr.map((_, i) => `<span style="font-size:7px;color:${C.textMuted};font-family:monospace">W${i + 1}</span>`).join("");
+
+      parts.push(`<div style="${cardStyle}">
+        ${sectionLabel("FPCR Trend — Weekly")}
+        <svg viewBox="0 0 ${w} ${h}" style="width:100%">
+          <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${C.green}" stop-opacity="0.3"/><stop offset="100%" stop-color="${C.green}" stop-opacity="0"/></linearGradient></defs>
+          <path d="${areaD}" fill="url(#tg)"/>
+          <path d="${pathD}" fill="none" stroke="${C.green}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          ${dots}
+        </svg>
+        <div style="display:flex;justify-content:space-between;margin-top:4px">${labels}</div>
+      </div>`);
+    }
+
+    // Operational Stats
+    const opStats = [
+      { val: total > 0 ? Math.round(avgDuration / 1000) : 0, unit: "s", label: "Avg Duration" },
+      { val: totalLearnings, unit: "", label: "Learnings" },
+      { val: totalFiles, unit: "", label: "Files Changed" },
+      { val: kFiles, unit: "", label: "Knowledge Files" },
+    ];
+    if (totalCost > 0) opStats.push({ val: Number(totalCost.toFixed(4)), unit: "$", label: "Total Cost" });
+
+    const opGrid = opStats.map(s => `<div style="text-align:center">
+      <div style="font-size:18px;font-weight:800;color:${C.text};font-family:monospace">${s.val}${s.unit ? `<span style="font-size:10px;color:${C.textDim}">${s.unit}</span>` : ""}</div>
+      <div style="font-size:7px;color:${C.textDim};text-transform:uppercase;letter-spacing:1px;margin-top:2px">${s.label}</div>
+    </div>`).join("");
+
+    parts.push(`<div style="${cardStyle}">
+      ${sectionLabel("Operational")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${opGrid}</div>
+    </div>`);
+
+    // ══════════════════════════════════════════════
+    // ROW 4 — History Table
+    // ══════════════════════════════════════════════
+    if (total > 0) {
+      const last8 = records.slice(-8);
+      const tierColor = (t: string) => {
+        const lc = String(t || "").toLowerCase();
+        if (lc === "high" || lc.includes("opus")) return C.purple;
+        if (lc === "mid" || lc.includes("sonnet")) return C.blue;
+        return C.teal;
+      };
+      const tierLabel = (t: string) => {
+        const lc = String(t || "").toLowerCase();
+        if (lc === "high" || lc.includes("opus")) return "opus";
+        if (lc === "mid" || lc.includes("sonnet")) return "sonnet";
+        return "haiku";
+      };
+      const rows = last8.map((r: any, i: number) => {
+        const p = isPassed(r);
+        const rounds = getRounds(r);
+        const dur = r.durationMs ? Math.round(r.durationMs / 1000) : 0;
+        const idx = total - last8.length + i + 1;
+        const scoreMatch = logLines.find(l => l.includes("steer.gate.done") && l.includes(r.taskId));
+        let score = "—";
+        if (scoreMatch) { const m = scoreMatch.match(/score=(\d+)/); if (m) score = String(Math.min(10, Number(m[1]))); }
+        return `<tr style="border-bottom:1px solid ${C.bgAlt}">
+          <td style="padding:4px 6px;color:${C.textMuted}">${idx}</td>
+          <td style="padding:4px 6px"><span style="color:${p ? C.green : C.red};font-weight:700">${p ? "PASS" : "FAIL"}</span></td>
+          <td style="padding:4px 6px;color:${rounds > 1 ? C.accent : C.textDim}">${rounds}</td>
+          <td style="padding:4px 6px;color:${tierColor(r.modelTier)}">${tierLabel(r.modelTier)}</td>
+          <td style="padding:4px 6px;color:${C.textDim}">${score}</td>
+          <td style="padding:4px 6px;color:${C.textDim}">${r.files?.length || 0}</td>
+          <td style="padding:4px 6px;color:${r.learnings > 0 ? C.green : C.textMuted}">${r.learnings || "—"}</td>
+          <td style="padding:4px 6px;color:${C.textDim}">${dur}s</td>
+        </tr>`;
+      }).join("");
+
+      parts.push(`<div style="${cardStyle}">
+        ${sectionLabel("History — Per Task Telemetry")}
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:9px;font-family:monospace">
+            <thead><tr style="border-bottom:1px solid ${C.border}">
+              ${["#", "FPCR", "Rnd", "Model", "Score", "Files", "Learn", "Time"].map(h => `<th style="padding:4px 6px;color:${C.textDim};font-weight:700;text-align:left;font-size:7px;letter-spacing:1px">${h}</th>`).join("")}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`);
+    }
+
+    if (total === 0) {
+      parts.push(this.emptyState("No completed tasks yet. Run /steer to start building metrics."));
     }
 
     return parts.join("");
+  }
+
+  private bigMetricCard(title: string, value: string, unit: string, label: string, color: string, sublabel: string): string {
+    return `<div style="padding:10px;border-radius:10px;background:${C.surface};border:1px solid ${C.border}">
+      <div style="font-size:7px;font-weight:700;color:${C.textDim};letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-family:monospace">${this.esc(title)}</div>
+      <div style="text-align:center">
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:2px">
+          <span style="font-size:28px;font-weight:800;color:${color};font-family:monospace;line-height:1">${value}</span>
+          ${unit ? `<span style="font-size:12px;font-weight:600;color:${color}88">${unit}</span>` : ""}
+        </div>
+        <div style="font-size:9px;color:${C.textDim};margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:1px">${label}</div>
+        <div style="font-size:8px;color:${C.textMuted};margin-top:2px">${sublabel}</div>
+      </div>
+    </div>`;
   }
 
   private metricCard(label: string, value: string, unit: string, color: string): string {
@@ -1039,6 +1234,153 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <button onclick="runCommand('steeragent.rebuildMap')" style="margin-top:8px;padding:6px 12px;border-radius:4px;background:${C.accent};border:none;color:${C.bgAlt};font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">
           ${ICONS.play} Build Map
         </button>
+      </div>`);
+    }
+
+    return parts.join("");
+  }
+
+  // ═══════════════════════════════════════════════
+  // ─── LOG TAB ─────────────────────────────────
+  // ═══════════════════════════════════════════════
+  private renderLogTab(): string {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders?.length) return this.emptyState("No workspace open");
+
+    const logPath = vscode.Uri.joinPath(folders[0].uri, ".steer", "state", "steer.log").fsPath;
+
+    let lines: string[] = [];
+    try {
+      const content = fs.readFileSync(logPath, "utf-8");
+      lines = content.split("\n").filter(Boolean);
+    } catch {
+      return this.emptyState("No logs yet. Run a steer workflow to generate logs.");
+    }
+
+    if (lines.length === 0) {
+      return this.emptyState("Log file is empty. Start a steer workflow.");
+    }
+
+    // Show most recent entries first, limit to 100
+    const recent = lines.slice(-100).reverse();
+
+    const parts: string[] = [];
+    parts.push(`<div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Workflow Log</span>
+      <span style="font-size:9px;color:${C.textDim};text-transform:none;letter-spacing:normal">${lines.length} entries</span>
+    </div>`);
+
+    for (const line of recent) {
+      // Parse: [2026-03-08T10:30:00.000Z] TOOL steer.start(taskId=task_123, mode=dev)
+      const match = line.match(/^\[([^\]]+)\]\s+(.*)$/);
+      if (!match) continue;
+
+      const timestamp = match[1];
+      const message = match[2];
+
+      // Determine entry type and color
+      let color = C.textDim;
+      let icon = ICONS.code;
+      let label = "LOG";
+
+      if (message.startsWith("TOOL steer.gate")) {
+        color = C.purple;
+        icon = ICONS.shield;
+        label = "GATE";
+      } else if (message.startsWith("TOOL steer.start")) {
+        color = C.green;
+        icon = ICONS.play;
+        label = "START";
+      } else if (message.startsWith("TOOL steer.plan")) {
+        color = C.blue;
+        icon = ICONS.brain;
+        label = "PLAN";
+      } else if (message.startsWith("TOOL steer.execute")) {
+        color = C.accent;
+        icon = ICONS.bolt;
+        label = "EXEC";
+      } else if (message.startsWith("TOOL steer.verify")) {
+        color = C.teal;
+        icon = ICONS.check;
+        label = "VERIFY";
+      } else if (message.startsWith("TOOL steer.learn")) {
+        color = C.yellow;
+        icon = ICONS.brain;
+        label = "LEARN";
+      } else if (message.startsWith("TOOL steer.run")) {
+        color = C.accent;
+        icon = ICONS.bolt;
+        label = "RUN";
+      }
+
+      // Extract key-value pairs from the tool call args
+      const argsMatch = message.match(/\(([^)]*)\)$/);
+      const argsStr = argsMatch ? argsMatch[1] : "";
+      const isDoneEntry = message.includes(".done(");
+
+      // Format time
+      let timeStr = "";
+      try {
+        const d = new Date(timestamp);
+        timeStr = d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      } catch {
+        timeStr = timestamp.slice(11, 19);
+      }
+
+      // Highlight key metrics from .done entries
+      let metricsHtml = "";
+      if (isDoneEntry && argsStr) {
+        const metrics: string[] = [];
+        const scoreMatch = argsStr.match(/score=(\d+)/);
+        const statusMatch = argsStr.match(/status=(\w+)/);
+        const costMatch = argsStr.match(/cost=([\d.]+)/);
+        const modelMatch = argsStr.match(/model=(\w+)/);
+        const passedMatch = argsStr.match(/passed=(true|false)/);
+        const learningsMatch = argsStr.match(/learnings=(\d+)/);
+        const fpcrMatch = argsStr.match(/fpcr=(true|false)/);
+        const durationMatch = argsStr.match(/durationMs=(\d+)/);
+        const stepsMatch = argsStr.match(/planSteps=(\d+)/);
+        const responseMatch = argsStr.match(/responseChars=(\d+)/);
+
+        if (scoreMatch) metrics.push(`<span style="color:${C.accent}">score:${scoreMatch[1]}/10</span>`);
+        if (statusMatch) {
+          const sc = statusMatch[1] === "READY" ? C.green : statusMatch[1] === "BLOCKED" ? C.red : C.yellow;
+          metrics.push(`<span style="color:${sc}">${statusMatch[1]}</span>`);
+        }
+        if (modelMatch) metrics.push(`<span style="color:${C.blue}">model:${modelMatch[1]}</span>`);
+        if (costMatch) metrics.push(`<span style="color:${C.teal}">$${parseFloat(costMatch[1]).toFixed(4)}</span>`);
+        if (passedMatch) {
+          const pc = passedMatch[1] === "true" ? C.green : C.red;
+          metrics.push(`<span style="color:${pc}">${passedMatch[1] === "true" ? "PASS" : "FAIL"}</span>`);
+        }
+        if (stepsMatch) metrics.push(`<span style="color:${C.blue}">${stepsMatch[1]} steps</span>`);
+        if (learningsMatch) metrics.push(`<span style="color:${C.yellow}">${learningsMatch[1]} learnings</span>`);
+        if (fpcrMatch) {
+          const fc = fpcrMatch[1] === "true" ? C.green : C.red;
+          metrics.push(`<span style="color:${fc}">FPCR:${fpcrMatch[1]}</span>`);
+        }
+        if (durationMatch) {
+          const ms = parseInt(durationMatch[1]);
+          const sec = (ms / 1000).toFixed(1);
+          metrics.push(`<span style="color:${C.textDim}">${sec}s</span>`);
+        }
+        if (responseMatch) metrics.push(`<span style="color:${C.textDim}">${responseMatch[1]}ch</span>`);
+
+        if (metrics.length > 0) {
+          metricsHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;font-size:9px">${metrics.join("")}</div>`;
+        }
+      }
+
+      const toolName = isDoneEntry ? label + " done" : label;
+
+      parts.push(`<div style="padding:6px 8px;border-radius:6px;background:${C.surface};border:1px solid ${C.border};border-left:2px solid ${color}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:${color}">${icon}</span>
+          <span style="font-size:10px;font-weight:600;color:${color}">${toolName}</span>
+          <span style="font-size:9px;color:${C.textDim};margin-left:auto;font-variant-numeric:tabular-nums">${timeStr}</span>
+        </div>
+        ${argsStr ? `<div style="font-size:9px;color:${C.textDim};margin-top:2px;word-break:break-all">${this.esc(argsStr)}</div>` : ""}
+        ${metricsHtml}
       </div>`);
     }
 

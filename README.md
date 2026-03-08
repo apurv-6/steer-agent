@@ -131,7 +131,17 @@ steer-agent init --template coinswitch
 
 ## What Gets Installed
 
-The installer registers these components in `~/.claude/settings.json`:
+`steer-agent install` registers **5 components** in a single command:
+
+| Component | Location | Purpose |
+|---|---|---|
+| **MCP Server** | `~/.claude/settings.json` → `mcpServers.steer-agent` | Workflow engine — 14 tools |
+| **Hook** | `~/.claude/settings.json` → `hooks.UserPromptSubmit` | Context injection on every prompt |
+| **Skills** | `~/.claude/skills/steer-*` (16 symlinks) | Slash commands (`/steer-start`, `/steer-plan`, etc.) |
+| **Commands** | `~/.claude/commands/steer/` (symlink) | Command definitions with allowed-tools |
+| **Extension** | Cursor/VS Code | 5-tab sidebar (optional) |
+
+All paths use absolute references so the install works regardless of nvm version or shell.
 
 ### MCP Server
 ```json
@@ -162,16 +172,227 @@ The installer registers these components in `~/.claude/settings.json`:
 }
 ```
 
-### Skills
-14 slash commands symlinked to `~/.claude/skills/`:
+### Skills (16 slash commands)
 ```
 steer, steer-start, steer-plan, steer-execute, steer-verify,
 steer-commit, steer-pr, steer-gate, steer-map, steer-impact,
-steer-resume, steer-similar, steer-learn, steer-knowledge, steer-init
+steer-resume, steer-similar, steer-learn, steer-knowledge,
+steer-init, steer-status
 ```
 
 ### Extension (Optional)
 `.vsix` installed into Cursor or VS Code via `cursor --install-extension` or `code --install-extension`.
+
+---
+
+## High-Level Design (HLD)
+
+### Architecture — 3 Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3: IDE Extension (Cursor / VS Code)              │
+│  packages/cursor-extension/src/                         │
+│  ├── extension.ts          — activation, MCP client     │
+│  ├── panels/sidebar.ts     — 5-tab webview UI           │
+│  └── SessionState.ts       — extension state mgmt       │
+│  Role: Read-only dashboard. Calls MCP for all actions.  │
+└──────────────────────┬──────────────────────────────────┘
+                       │ MCP protocol (stdio)
+┌──────────────────────▼──────────────────────────────────┐
+│  Layer 2: MCP Server (workflow engine)                  │
+│  packages/mcp-server/src/                               │
+│  ├── index.ts              — server setup, tool registry│
+│  └── tools/                                             │
+│      ├── start.ts          — context gathering          │
+│      ├── plan.ts           — planning + impact preview  │
+│      ├── execute.ts        — execution tracking         │
+│      ├── verify.ts         — acceptance gate            │
+│      └── learn.ts          — knowledge extraction       │
+│  Role: Owns ALL logic. Reads/writes .steer/ state.      │
+└──────────────────────┬──────────────────────────────────┘
+                       │ reads/writes filesystem
+┌──────────────────────▼──────────────────────────────────┐
+│  Layer 1: .steer/ folder (project config + state)       │
+│  .steer/                                                │
+│  ├── config.json           — routing, model policy      │
+│  ├── RULES.md              — governance (BLOCK/WARN/AUTO│
+│  ├── templates/            — prompt templates per mode  │
+│  ├── knowledge/            — compounding learnings (git)│
+│  └── state/                — runtime (gitignored)       │
+│      ├── current-task.json — active task state           │
+│      ├── history.jsonl     — FPCR telemetry             │
+│      └── steer.log         — execution log              │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key rule:** MCP owns all logic. Extension NEVER writes to `.steer/` directly. Works 100% without the extension.
+
+### Core Engine
+
+```
+packages/core/src/
+├── start.ts             — task initialization, context assembly
+├── completion.ts        — model routing + tier selection
+├── generateFollowUps.ts — follow-up question generation
+├── promptAssembler.ts   — template + RAG + context → final prompt
+├── rag/
+│   ├── chunker.ts       — splits files into chunks + keyword extraction
+│   ├── indexer.ts       — TF-IDF index builder (buildIndex/loadIndex)
+│   └── retriever.ts     — keyword search over index (top-8 chunks)
+├── scoring.ts           — CLEAR score calculation
+├── codemap.ts           — codebase intelligence
+└── state.ts             — current-task.json read/write
+```
+
+### 8-Step Workflow — Data Flow
+
+Every task follows the same governed pipeline. Each step has a mandatory MCP tool call (except Step 5 and 8).
+
+```
+  User types /steer-start "fix auth bug"
+  │
+  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 1: CONTEXT                          MCP: steer_start           │
+│                                                                      │
+│ Trigger:  /steer-start or /steer skill                              │
+│ Input:    task description, mode (inferred from keywords)           │
+│ Process:                                                             │
+│   core/start.ts         → initialize task state                     │
+│   core/rag/indexer.ts   → load/build TF-IDF index                   │
+│   core/rag/retriever.ts → search index → top 8 relevant chunks     │
+│   core/codemap.ts       → module tree, change coupling              │
+│   .steer/knowledge/     → load team learnings for this module       │
+│   .steer/templates/     → load prompt template for mode             │
+│ Output:   current-task.json created, context assembled              │
+│ State:    .steer/state/current-task.json { status: "context" }      │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 2: GATE                             MCP: steer_gate            │
+│                                                                      │
+│ Input:    draft prompt, mode, taskId                                │
+│ Process:                                                             │
+│   core/scoring.ts       → CLEAR score (Context, Length, Examples,   │
+│                            Accuracy, Requirements) — deterministic  │
+│   core/generateFollowUps.ts → generate clarifying questions         │
+│   core/completion.ts    → route to model tier (haiku/sonnet/opus)   │
+│ Output:   score (1-10), tier recommendation, follow-ups             │
+│ Gate:     score <= 3 = BLOCKED, 4-6 = NEEDS_INFO, 7+ = PASS        │
+│ State:    current-task.json { status: "gated", score, tier }        │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 3: PLANNING                         MCP: steer_plan            │
+│                                                                      │
+│ Input:    taskId, goal, files, acceptance criteria                   │
+│ Process:                                                             │
+│   mcp-server/tools/plan.ts → impact analysis on target files        │
+│   .steer/RULES.md          → check governance rules (BLOCK/WARN)    │
+│   core/codemap.ts          → dependency graph for scope validation  │
+│ Output:   execution plan with file list + acceptance criteria       │
+│ Gate:     WAIT for user approval before proceeding                  │
+│ State:    current-task.json { status: "planned", plan: {...} }      │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼  (user approves)
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 4: EXECUTION                        MCP: steer_execute         │
+│                                                                      │
+│ Input:    taskId, approved: true                                    │
+│ Process:                                                             │
+│   AI agent makes code changes per approved plan                     │
+│   mcp-server/tools/execute.ts → log execution start/end            │
+│   .steer/RULES.md             → enforce AUTO rules (lint, tests)   │
+│ Output:   code changes applied                                      │
+│ State:    current-task.json { status: "executed" }                  │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 5: REFLECTION                       (no MCP call)              │
+│                                                                      │
+│ Process:  AI self-reviews changes vs acceptance criteria            │
+│           Checks: plan coverage, scope creep, edge cases            │
+│ Output:   gaps/risks identified                                     │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 6: VERIFICATION                     MCP: steer_verify          │
+│                                                                      │
+│ Input:    taskId, cwd                                               │
+│ Process:                                                             │
+│   mcp-server/tools/verify.ts → run acceptance checklist             │
+│   Run tests (npm test / vitest)                                     │
+│   Compare behavior: before vs after                                 │
+│ Output:   pass/fail per acceptance criterion                        │
+│ State:    current-task.json { status: "verified", results: [...] }  │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 7: LEARNING                         MCP: steer_learn           │
+│                                                                      │
+│ Input:    taskId, cwd                                               │
+│ Process:                                                             │
+│   mcp-server/tools/learn.ts → extract patterns from completed task │
+│   .steer/knowledge/         → persist learnings (committed to git) │
+│   .steer/state/learnings.jsonl → append raw entry                  │
+│ Output:   knowledge entries saved                                   │
+│ State:    current-task.json { status: "learned" }                   │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ STEP 8: OUTPUT                           (no MCP call)              │
+│                                                                      │
+│ Process:  Summarize what changed, files modified, verification      │
+│           Generate commit message (/steer-commit)                   │
+│           Generate PR description (/steer-pr)                       │
+│           Log FPCR telemetry to history.jsonl                       │
+│ Output:   task complete, knowledge compounded                       │
+│ State:    current-task.json { status: "complete" }                  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Hook: UserPromptSubmit
+
+Runs on **every** user prompt (before AI responds):
+
+```
+User types message
+  │
+  ▼
+packages/cli/src/hooks/prompt-submit.ts
+  │
+  ├── Reads .steer/state/current-task.json
+  ├── Injects active task context into prompt
+  └── Returns { "result": "Success" }
+```
+
+### RAG Pipeline
+
+```
+Build (once per project):
+  core/rag/chunker.ts    → split all project files into chunks
+  core/rag/indexer.ts    → extract keywords → build TF-IDF index
+  Output: .steer/embeddings/index.json (468 chunks, 2006 keywords)
+
+Query (every steer_start):
+  core/rag/retriever.ts  → keyword search → top 8 chunks by TF-IDF score
+  core/promptAssembler.ts → inject chunks into prompt template
+```
+
+### Governance Engine
+
+```
+.steer/RULES.md defines rules with severity:
+  [BLOCK]  → hard stop, requires explicit approval
+  [WARN]   → warning surfaced, must acknowledge
+  [AUTO]   → enforced automatically (lint, test)
+
+Checked at:
+  Step 3 (Planning)  → BLOCK/WARN rules checked against file scope
+  Step 4 (Execution) → AUTO rules enforced (lint before commit)
+  Step 6 (Verify)    → all rules re-checked against final changes
+```
 
 ---
 
@@ -195,50 +416,6 @@ steer-agent uninstall                      Remove global components (keeps .stee
 
 ---
 
-## How It Works
-
-### Architecture
-
-```
-Layer 3: Cursor / VS Code Extension  (5-tab sidebar — optional)
-           |  read + MCP commands
-Layer 2: MCP Server                  (workflow engine — owns all logic)
-           |  reads/writes
-Layer 1: .steer/ folder              (config, rules, knowledge — committed to git)
-```
-
-- Works in **any MCP host**: Cursor, VS Code, Claude Code, Windsurf, OpenCode, Gemini CLI
-- Extension is optional — full functionality via MCP alone
-
-### 8-Step Workflow
-
-Every task runs through the same pipeline:
-
-```
-1. Context      — codebase map + RAG + knowledge files + git + Jira/Sentry
-2. Prompt       — structured template assembled from all context
-3. Plan         — impact preview + file scope + sub-agent split decision
-4. Execute      — single agent or parallel sub-agents (file-isolated)
-5. Reflect      — self-review: plan coverage, scope, acceptance criteria
-6. Verify       — acceptance gate checklist
-7. Learn        — extract patterns → persist to .steer/knowledge/
-8. Output       — commit message + PR description + FPCR telemetry
-```
-
-### Governance Rules
-
-Rules live in `.steer/RULES.md`:
-
-| Severity | Behavior |
-|---|---|
-| `[BLOCK]` | Hard stop — explicit approval required |
-| `[WARN]` | Warning surfaced — acknowledged before proceeding |
-| `[AUTO]` | Enforced automatically (e.g. lint before commit) |
-
-CoinSwitch preset includes: scope restriction, auth/payments module guard, test coverage, repository pattern, PR size limit, lint-on-commit.
-
----
-
 ## Extension Sidebar (5 Tabs)
 
 | Tab | What It Shows |
@@ -258,7 +435,7 @@ Installed automatically. Skip with: `steer-agent install --no-ext`
 After install, these work in Claude Code chat:
 
 ```
-/steer-start     Begin a new task (mode picker -> context -> plan)
+/steer-start     Begin a new task (auto-detects mode → full 8-step workflow)
 /steer-plan      Create execution plan with impact preview
 /steer-execute   Execute approved plan
 /steer-verify    Run acceptance gate

@@ -49,6 +49,23 @@ function resolveSkillsDir(): string {
   throw new Error("Could not locate skills directory. Run: steer-agent install after npm install -g.");
 }
 
+function resolveCommandsDir(): string | null {
+  // 1. Package-local commands/ (present after prepack / in published npm package)
+  const pkgLocal = path.join(__dirname, "..", "commands");
+  if (fs.existsSync(pkgLocal)) return pkgLocal;
+
+  // 2. Walk up from __dirname to find .claude/commands/ (monorepo / npm link)
+  let dir = __dirname;
+  for (let i = 0; i < 10; i++) {
+    const candidate = path.join(dir, ".claude", "commands");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 function findVsixPath(): string | null {
   // 1. Package-local extension/ dir (after prepack copy)
   const localExt = path.join(__dirname, "..", "extension");
@@ -163,7 +180,47 @@ export async function runInstall(argv: string[]): Promise<void> {
     console.log(`  └── ⚠️  Could not install skills: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // 3. Register hook
+  // 3. Install commands (symlinks for slash commands like /steer)
+  console.log("\n  Commands");
+  const globalCommandsDir = path.join(claudeDir, "commands");
+  fs.mkdirSync(globalCommandsDir, { recursive: true });
+
+  let commandsInstalled = 0;
+  const commandsSource = resolveCommandsDir();
+  if (commandsSource) {
+    const commandDirs = fs.readdirSync(commandsSource).filter((f) =>
+      fs.statSync(path.join(commandsSource, f)).isDirectory()
+    );
+
+    for (const cmd of commandDirs) {
+      const source = path.join(commandsSource, cmd);
+      const target = path.join(globalCommandsDir, cmd);
+
+      const targetExists = (() => { try { fs.lstatSync(target); return true; } catch { return false; } })();
+      if (targetExists) {
+        if (args.force) {
+          fs.rmSync(target, { recursive: true, force: true });
+        } else {
+          commandsInstalled++;
+          continue;
+        }
+      }
+
+      try {
+        fs.symlinkSync(source, target, "dir");
+        commandsInstalled++;
+      } catch {
+        commandsInstalled++;
+      }
+    }
+
+    console.log(`  ├── Linking to ~/.claude/commands/`);
+    console.log(`  └── ✅ ${commandsInstalled} command namespaces installed`);
+  } else {
+    console.log(`  └── ⚠️  No commands directory found — skipping`);
+  }
+
+  // 4. Register hook
   console.log("\n  Hooks");
   if (!settings.hooks) (settings as Record<string, unknown>).hooks = {};
   const hooks = settings.hooks as Record<string, unknown>;
@@ -199,19 +256,23 @@ export async function runInstall(argv: string[]): Promise<void> {
       });
       hooks.UserPromptSubmit = filtered;
       (hooks.UserPromptSubmit as Array<unknown>).push({
-        hooks: [{
-          type: "command",
-          command: hookCmd,
-          timeout: 5000,
-        }],
+        hooks: [
+          {
+            type: "command",
+            command: hookCmd,
+            timeout: 5000,
+          },
+        ],
       });
     } else {
       userHooks.push({
-        hooks: [{
-          type: "command",
-          command: hookCmd,
-          timeout: 5000,
-        }],
+        hooks: [
+          {
+            type: "command",
+            command: hookCmd,
+            timeout: 5000,
+          },
+        ],
       });
     }
     changed = true;

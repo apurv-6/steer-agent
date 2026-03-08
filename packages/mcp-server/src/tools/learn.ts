@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, completeTask, steerDirExists } from "@steer-agent-tool/core";
+import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, completeTask, steerDirExists, logToolCall } from "@steer-agent-tool/core";
 
 export const LearnSchema = {
   taskId: z.string().describe("Task ID to extract learnings from"),
@@ -21,6 +21,8 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
     const statePath = join(cwd, ".steer", "state", "current-task.json");
     const state = JSON.parse(readFileSync(statePath, "utf-8"));
 
+    try { logToolCall("steer.learn", { taskId: args.taskId }, cwd); } catch {}
+
     const learnings = extractLearnings(state);
 
     // Persist to learnings.jsonl
@@ -37,15 +39,19 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
       updateKnowledgeFile(module, entries, cwd);
     }
 
-    // Transition to learning step
+    // Transition through learning step then to done
     state.learningNotes = learnings;
-    let updated = transitionStep(state, "learning");
+    const afterLearning = transitionStep(state, "learning");
 
-    // Complete the task: write history entry with FPCR and transition to done
-    const historyEntry = completeTask(updated, cwd);
-    updated = transitionStep(updated, "done");
-    updated.resumable = false;
-    writeFileSync(statePath, JSON.stringify(updated, null, 2));
+    // Write history entry before transitioning to done
+    const historyEntry = completeTask(afterLearning, cwd);
+
+    // Transition to done
+    const final = transitionStep(afterLearning, "done");
+    final.resumable = false;
+    writeFileSync(statePath, JSON.stringify(final, null, 2));
+
+    try { logToolCall("steer.learn.done", { taskId: args.taskId, learnings: learnings.length, fpcr: historyEntry.fpcr, durationMs: historyEntry.durationMs }, cwd); } catch {}
 
     return {
       content: [{
@@ -53,10 +59,12 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
         text: JSON.stringify({
           taskId: args.taskId,
           status: "done",
-          fpcr: historyEntry.fpcr,
           learnings: learnings.length,
           modules: [...byModule.keys()],
           entries: learnings.map((l: any) => ({ category: l.category, summary: l.summary, module: l.module })),
+          fpcr: historyEntry.fpcr,
+          round: historyEntry.round,
+          durationMs: historyEntry.durationMs,
         }, null, 2),
       }],
     };

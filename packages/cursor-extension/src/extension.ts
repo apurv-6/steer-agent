@@ -42,14 +42,27 @@ export function activate(context: vscode.ExtensionContext) {
   console.log(`[steer-agent-tool] Extension activated v${VERSION}`);
 
   // Register v2 sidebar (connected to sessionState for live updates)
+  let sidebar: SidebarProvider | undefined;
   try {
-    const sidebar = new SidebarProvider(context.extensionUri, sessionState);
+    sidebar = new SidebarProvider(context.extensionUri, sessionState);
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebar),
     );
   } catch (err) {
     console.warn("[steer] Sidebar registration failed:", err);
   }
+
+  // Auto-reveal sidebar LOG tab when steer.log changes
+  const logWatcher = vscode.workspace.createFileSystemWatcher("**/.steer/state/steer.log");
+  const handleLogChange = () => {
+    if (sidebar) {
+      sidebar.setTab("log");
+      vscode.commands.executeCommand("steeragent.sidebar.focus");
+    }
+  };
+  logWatcher.onDidChange(handleLogChange);
+  logWatcher.onDidCreate(handleLogChange);
+  context.subscriptions.push(logWatcher);
 
   // Register bridge commands
   registerBridgeCommands(context);

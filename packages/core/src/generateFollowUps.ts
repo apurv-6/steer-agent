@@ -16,8 +16,9 @@ export function generateFollowUps(result: ScoreResult, mode?: Mode): FollowUp[] 
 
   if (result.missing.includes("LIMITS")) {
     questions.push({
-      question: "What constraints or scope boundaries should apply?",
-      type: "open",
+      question: "What is the scope of this change?",
+      type: "mcq",
+      options: ["Only referenced files", "Module-level (related files ok)", "Repo-wide", "Not sure yet"],
     });
   }
 
@@ -25,8 +26,9 @@ export function generateFollowUps(result: ScoreResult, mode?: Mode): FollowUp[] 
 
   if (result.missing.includes("REVIEW")) {
     questions.push({
-      question: "How should the result be verified or tested?",
-      type: "open",
+      question: "How should the result be verified?",
+      type: "mcq",
+      options: ["Run existing tests", "Manual testing", "Code review", "New tests required"],
     });
   }
 
@@ -47,7 +49,8 @@ export function generateFollowUps(result: ScoreResult, mode?: Mode): FollowUp[] 
   if ((mode === "bugfix" || mode === "debug") && result.missing.includes("REVIEW")) {
     questions.push({
       question: "Do you have repro steps or error logs?",
-      type: "open",
+      type: "mcq",
+      options: ["Yes, have repro steps", "Have error logs only", "No repro steps yet"],
     });
   }
 

@@ -14,7 +14,6 @@ export interface SessionStateData {
   lastScore: number | null;
   scoreTrend: number[];  // last N scores for trend display
   lastStatus: string | null;
-  // Workflow fields (populated from .steer/state/current-task.json watcher)
   workflowStep: string | null;
   workflowGoal: string | null;
   workflowFiles: string[];

@@ -41,6 +41,7 @@ export async function runUninstall(argv: string[]): Promise<void> {
   console.log("  This will remove:");
   console.log("  ├── MCP server registration from ~/.claude/settings.json");
   console.log("  ├── steer-* skill symlinks from ~/.claude/skills/");
+  console.log("  ├── steer command symlinks from ~/.claude/commands/");
   console.log("  ├── steer-hook-prompt from UserPromptSubmit hooks");
   console.log("  └── VS Code / Cursor extension\n");
   console.log("  This will NOT remove:");
@@ -95,13 +96,47 @@ export async function runUninstall(argv: string[]): Promise<void> {
     console.log("  ⏭  No skill symlinks found");
   }
 
-  // 3. Remove hook
+  // 3. Remove command symlinks
+  const globalCommandsDir = path.join(home, ".claude", "commands");
+  let removedCommands = 0;
+  if (fs.existsSync(globalCommandsDir)) {
+    const entries = fs.readdirSync(globalCommandsDir).filter((f) => f === "steer");
+    for (const entry of entries) {
+      const target = path.join(globalCommandsDir, entry);
+      try {
+        fs.rmSync(target, { recursive: true, force: true });
+        removedCommands++;
+      } catch {
+        // ignore
+      }
+    }
+  }
+  if (removedCommands > 0) {
+    console.log(`  ✅ ${removedCommands} command symlinks removed`);
+  } else {
+    console.log("  ⏭  No command symlinks found");
+  }
+
+  // 4. Remove hook
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
   const userHooks = (hooks.UserPromptSubmit ?? []) as Array<Record<string, unknown>>;
   const before = userHooks.length;
-  const filtered = userHooks.filter(
-    (h) => !(typeof h.command === "string" && h.command.includes("steer-hook-prompt"))
-  );
+  const filtered = userHooks.filter((h) => {
+    // Flat format: { command: "..." }
+    if (typeof h.command === "string" && (h.command.includes("steer-hook-prompt") || h.command.includes("prompt-submit"))) {
+      return false;
+    }
+    // Nested format: { hooks: [{ command: "..." }] }
+    const nested = (h as Record<string, unknown>).hooks;
+    if (Array.isArray(nested)) {
+      if ((nested as Array<Record<string, unknown>>).some(
+        (inner) => typeof inner.command === "string" && (inner.command.includes("steer-hook-prompt") || inner.command.includes("prompt-submit"))
+      )) {
+        return false;
+      }
+    }
+    return true;
+  });
   if (filtered.length < before) {
     hooks.UserPromptSubmit = filtered;
     settings.hooks = hooks;

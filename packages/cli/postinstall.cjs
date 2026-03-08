@@ -79,6 +79,23 @@ function findSkillsSrc() {
   return null;
 }
 
+function findCommandsSrc() {
+  // 1. Package-local commands/ (present in published npm package after prepack)
+  const local = path.join(PKG_ROOT, 'commands');
+  if (fs.existsSync(local)) return local;
+
+  // 2. Walk up from PKG_ROOT — finds .claude/commands/ in the monorepo root
+  let dir = PKG_ROOT;
+  for (let i = 0; i < 8; i++) {
+    const candidate = path.join(dir, '.claude', 'commands');
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 function main() {
   try {
     if (process.env.STEER_SKIP_POSTINSTALL === '1') return;
@@ -168,6 +185,25 @@ function main() {
       log('✅ ' + count + ' skills installed');
     } else {
       log('⚠️  Skills not found. Run: steer-agent install');
+    }
+
+    // ── Install commands ──
+    const GLOBAL_CMDS_DIR = path.join(CLAUDE_DIR, 'commands');
+    const cmdsSrc = findCommandsSrc();
+    if (cmdsSrc) {
+      fs.mkdirSync(GLOBAL_CMDS_DIR, { recursive: true });
+      let cmdCount = 0;
+      for (const entry of fs.readdirSync(cmdsSrc)) {
+        const src = path.join(cmdsSrc, entry);
+        if (!fs.statSync(src).isDirectory()) continue;
+        const dst = path.join(GLOBAL_CMDS_DIR, entry);
+        try { fs.rmSync(dst, { recursive: true, force: true }); } catch {}
+        try { fs.symlinkSync(src, dst, 'dir'); cmdCount++; }
+        catch { try { fs.cpSync(src, dst, { recursive: true }); cmdCount++; } catch {} }
+      }
+      log('✅ ' + cmdCount + ' command namespaces installed');
+    } else {
+      log('⚠️  Commands not found. Run: steer-agent install');
     }
 
     // ── Install extension ──

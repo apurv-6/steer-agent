@@ -34,8 +34,7 @@ export async function buildIndex(root: string): Promise<KeywordIndex> {
     allChunks.push(...chunks);
   }
 
-  // Build inverted index (use null-prototype objects to avoid collisions with
-  // built-in Object properties like "constructor", "toString", etc.)
+  // Build inverted index (Object.create(null) avoids prototype key collisions like "constructor")
   const invertedIndex: Record<string, string[]> = Object.create(null);
   const df: Record<string, number> = Object.create(null);
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { transitionStep, steerDirExists } from "@steer-agent-tool/core";
+import { transitionStep, steerDirExists, logToolCall } from "@steer-agent-tool/core";
 
 export const ExecuteSchema = {
   taskId: z.string().describe("Task ID to execute"),
@@ -27,6 +27,8 @@ export async function handleExecute(args: { taskId: string; approved?: boolean; 
         content: [{ type: "text" as const, text: JSON.stringify({ status: "plan_rejected", message: "Plan was not approved. Revise and re-plan." }) }],
       };
     }
+
+    try { logToolCall("steer.execute", { taskId: args.taskId, approved: args.approved, goal: state.goal }, cwd); } catch {}
 
     const updated = transitionStep(state, "execution");
     writeFileSync(statePath, JSON.stringify(updated, null, 2));
