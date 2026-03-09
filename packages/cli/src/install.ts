@@ -142,9 +142,34 @@ export async function runInstall(argv: string[]): Promise<void> {
       : { command: steerMcpBin, args: [], env: {} };
     changed = true;
     console.log("  ├── Registering in ~/.claude/settings.json");
-    console.log("  └── ✅ steer-agent MCP server registered");
+    console.log("  └── ✅ steer-agent MCP server registered (Claude Code)");
   } else {
-    console.log("  └── ✅ MCP server already registered");
+    console.log("  └── ✅ MCP server already registered (Claude Code)");
+  }
+
+  // 1b. Register MCP server in Cursor (~/.cursor/mcp.json)
+  const cursorDir = path.join(home, ".cursor");
+  const cursorMcpPath = path.join(cursorDir, "mcp.json");
+  if (fs.existsSync(cursorDir)) {
+    const cursorMcp = loadOrCreateSettings(cursorMcpPath);
+    if (!cursorMcp.mcpServers) cursorMcp.mcpServers = {};
+    const cursorServers = cursorMcp.mcpServers as Record<string, unknown>;
+
+    if (!cursorServers["steer-agent"] || args.force) {
+      const steerMcpBin = findSteerMcpBin();
+      const isAbs = path.isAbsolute(steerMcpBin);
+      const nodeBinCursor = findNodeBin();
+      cursorServers["steer-agent"] = isAbs
+        ? { command: nodeBinCursor, args: [steerMcpBin] }
+        : { command: steerMcpBin, args: [] };
+      // Remove old name if present
+      if (cursorServers["steer-agent-tool"]) delete cursorServers["steer-agent-tool"];
+      fs.writeFileSync(cursorMcpPath, JSON.stringify(cursorMcp, null, 2));
+      console.log("  ├── Registering in ~/.cursor/mcp.json");
+      console.log("  └── ✅ steer-agent MCP server registered (Cursor)");
+    } else {
+      console.log("  └── ✅ MCP server already registered (Cursor)");
+    }
   }
 
   // 2. Install skills (symlinks)
