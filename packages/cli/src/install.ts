@@ -104,6 +104,14 @@ function findSteerMcpBin(): string {
   return "steer-mcp";
 }
 
+function findNodeBin(): string {
+  // Use absolute path to node so MCP works even when nvm isn't loaded in PATH
+  // (Claude Code, Cursor, etc. often have a minimal PATH without nvm)
+  const nodeBin = process.execPath;
+  if (nodeBin && fs.existsSync(nodeBin)) return nodeBin;
+  return "node";
+}
+
 export async function runInstall(argv: string[]): Promise<void> {
   const args = parseArgs(argv);
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/";
@@ -125,10 +133,12 @@ export async function runInstall(argv: string[]): Promise<void> {
 
   if (!mcpServers["steer-agent"] || args.force) {
     const steerMcpBin = findSteerMcpBin();
-    // Use absolute path via `node <path>` when we found the bin locally
+    // Use absolute paths for both node and mcp-entry.js so MCP works
+    // even without nvm in PATH (Claude Code, Cursor, etc.)
     const isAbsolute = path.isAbsolute(steerMcpBin);
+    const nodeBin = findNodeBin();
     mcpServers["steer-agent"] = isAbsolute
-      ? { command: "node", args: [steerMcpBin], env: {} }
+      ? { command: nodeBin, args: [steerMcpBin], env: {} }
       : { command: steerMcpBin, args: [], env: {} };
     changed = true;
     console.log("  ├── Registering in ~/.claude/settings.json");
@@ -238,10 +248,11 @@ export async function runInstall(argv: string[]): Promise<void> {
     return typeof h.command === "string" && (h.command.includes("steer-hook-prompt") || h.command.includes("prompt-submit"));
   });
 
-  // Prefer absolute path for the hook binary to survive PATH changes
+  // Use absolute paths for both node and hook script to survive PATH changes
   const hookAbsPath = path.join(__dirname, "hooks", "prompt-submit.js");
+  const hookNodeBin = findNodeBin();
   const hookCmd = fs.existsSync(hookAbsPath)
-    ? `node ${hookAbsPath}`
+    ? `${hookNodeBin} ${hookAbsPath}`
     : "steer-hook-prompt";
 
   if (!hasSteerHook || args.force) {
