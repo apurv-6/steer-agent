@@ -131,44 +131,52 @@ export async function runInstall(argv: string[]): Promise<void> {
   if (!settings.mcpServers) (settings as Record<string, unknown>).mcpServers = {};
   const mcpServers = settings.mcpServers as Record<string, unknown>;
 
-  if (!mcpServers["steer-agent"] || args.force) {
+  {
     const steerMcpBin = findSteerMcpBin();
-    // Use absolute paths for both node and mcp-entry.js so MCP works
-    // even without nvm in PATH (Claude Code, Cursor, etc.)
-    const isAbsolute = path.isAbsolute(steerMcpBin);
     const nodeBin = findNodeBin();
-    mcpServers["steer-agent"] = isAbsolute
+    const isAbsolute = path.isAbsolute(steerMcpBin);
+    const wantedMcp = isAbsolute
       ? { command: nodeBin, args: [steerMcpBin], env: {} }
       : { command: steerMcpBin, args: [], env: {} };
-    changed = true;
-    console.log("  ├── Registering in ~/.claude/settings.json");
-    console.log("  └── ✅ steer-agent MCP server registered (Claude Code)");
-  } else {
-    console.log("  └── ✅ MCP server already registered (Claude Code)");
-  }
-
-  // 1b. Register MCP server in Cursor (~/.cursor/mcp.json)
-  const cursorDir = path.join(home, ".cursor");
-  const cursorMcpPath = path.join(cursorDir, "mcp.json");
-  if (fs.existsSync(cursorDir)) {
-    const cursorMcp = loadOrCreateSettings(cursorMcpPath);
-    if (!cursorMcp.mcpServers) cursorMcp.mcpServers = {};
-    const cursorServers = cursorMcp.mcpServers as Record<string, unknown>;
-
-    if (!cursorServers["steer-agent"] || args.force) {
-      const steerMcpBin = findSteerMcpBin();
-      const isAbs = path.isAbsolute(steerMcpBin);
-      const nodeBinCursor = findNodeBin();
-      cursorServers["steer-agent"] = isAbs
-        ? { command: nodeBinCursor, args: [steerMcpBin] }
-        : { command: steerMcpBin, args: [] };
-      // Remove old name if present
-      if (cursorServers["steer-agent-tool"]) delete cursorServers["steer-agent-tool"];
-      fs.writeFileSync(cursorMcpPath, JSON.stringify(cursorMcp, null, 2));
-      console.log("  ├── Registering in ~/.cursor/mcp.json");
-      console.log("  └── ✅ steer-agent MCP server registered (Cursor)");
+    const existing = mcpServers["steer-agent"] as Record<string, unknown> | undefined;
+    // Always update if command/args differ (fixes bare "node" → absolute path)
+    const needsUpdate = !existing
+      || existing.command !== wantedMcp.command
+      || JSON.stringify(existing.args) !== JSON.stringify(wantedMcp.args)
+      || args.force;
+    if (needsUpdate) {
+      mcpServers["steer-agent"] = wantedMcp;
+      changed = true;
+      console.log("  ├── Registering in ~/.claude/settings.json");
+      console.log("  └── ✅ steer-agent MCP server registered (Claude Code)");
     } else {
-      console.log("  └── ✅ MCP server already registered (Cursor)");
+      console.log("  └── ✅ MCP server already registered (Claude Code)");
+    }
+
+    // 1b. Register MCP server in Cursor (~/.cursor/mcp.json)
+    const cursorDir = path.join(home, ".cursor");
+    const cursorMcpPath = path.join(cursorDir, "mcp.json");
+    if (fs.existsSync(cursorDir)) {
+      const cursorMcp = loadOrCreateSettings(cursorMcpPath);
+      if (!cursorMcp.mcpServers) cursorMcp.mcpServers = {};
+      const cursorServers = cursorMcp.mcpServers as Record<string, unknown>;
+      const cursorExisting = cursorServers["steer-agent"] as Record<string, unknown> | undefined;
+      const wantedCursor = isAbsolute
+        ? { command: nodeBin, args: [steerMcpBin] }
+        : { command: steerMcpBin, args: [] };
+      const cursorNeedsUpdate = !cursorExisting
+        || cursorExisting.command !== wantedCursor.command
+        || JSON.stringify(cursorExisting.args) !== JSON.stringify(wantedCursor.args)
+        || args.force;
+      if (cursorNeedsUpdate) {
+        cursorServers["steer-agent"] = wantedCursor;
+        if (cursorServers["steer-agent-tool"]) delete cursorServers["steer-agent-tool"];
+        fs.writeFileSync(cursorMcpPath, JSON.stringify(cursorMcp, null, 2));
+        console.log("  ├── Registering in ~/.cursor/mcp.json");
+        console.log("  └── ✅ steer-agent MCP server registered (Cursor)");
+      } else {
+        console.log("  └── ✅ MCP server already registered (Cursor)");
+      }
     }
   }
 

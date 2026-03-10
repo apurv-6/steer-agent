@@ -56,20 +56,49 @@ export async function runDoctor(): Promise<void> {
   const settings = readSettings(home);
   let settingsChanged = false;
 
-  // 1. MCP server registration
+  // 1. MCP server registration (Claude Code)
   const mcpServers = (settings.mcpServers ?? {}) as Record<string, unknown>;
-  if ("steer-agent" in mcpServers) {
-    results.push({ label: "MCP server registered", status: "ok", message: "steer-agent registered in settings.json" });
-  } else {
-    // Auto-fix: register it
+  const mcpEntryPath = path.join(__dirname, "mcp-entry.js");
+  const nodeBin = process.execPath || "node";
+  const hasMcpEntry = fs.existsSync(mcpEntryPath);
+  const existingMcp = mcpServers["steer-agent"] as Record<string, unknown> | undefined;
+  // Check if existing config uses absolute paths (not bare "node" or "steer-mcp")
+  const mcpNeedsFix = !existingMcp
+    || (hasMcpEntry && (existingMcp.command === "node" || existingMcp.command === "steer-mcp"
+      || (Array.isArray(existingMcp.args) && existingMcp.args[0] !== mcpEntryPath)));
+  if (mcpNeedsFix) {
     if (!settings.mcpServers) (settings as Record<string, unknown>).mcpServers = {};
-    (settings.mcpServers as Record<string, unknown>)["steer-agent"] = {
-      command: "steer-mcp",
-      args: [],
-      env: {},
-    };
+    (settings.mcpServers as Record<string, unknown>)["steer-agent"] = hasMcpEntry
+      ? { command: nodeBin, args: [mcpEntryPath], env: {} }
+      : { command: "steer-mcp", args: [], env: {} };
     settingsChanged = true;
-    results.push({ label: "MCP server registered", status: "fixed", message: "Was missing — added steer-mcp registration" });
+    results.push({ label: "MCP server (Claude Code)", status: "fixed", message: `Registered with absolute node path` });
+  } else {
+    results.push({ label: "MCP server (Claude Code)", status: "ok", message: "steer-agent registered in settings.json" });
+  }
+
+  // 1b. MCP server registration (Cursor)
+  const cursorDir = path.join(home, ".cursor");
+  const cursorMcpPath = path.join(cursorDir, "mcp.json");
+  if (fs.existsSync(cursorDir)) {
+    let cursorMcp: Record<string, unknown> = {};
+    try { cursorMcp = JSON.parse(fs.readFileSync(cursorMcpPath, "utf8")); } catch {}
+    if (!cursorMcp.mcpServers) cursorMcp.mcpServers = {};
+    const cursorServers = cursorMcp.mcpServers as Record<string, unknown>;
+    const cursorExisting = cursorServers["steer-agent"] as Record<string, unknown> | undefined;
+    const cursorNeedsFix = !cursorExisting
+      || (hasMcpEntry && (cursorExisting.command === "node" || cursorExisting.command === "steer-mcp"
+        || (Array.isArray(cursorExisting.args) && cursorExisting.args[0] !== mcpEntryPath)));
+    if (cursorNeedsFix && hasMcpEntry) {
+      cursorServers["steer-agent"] = { command: nodeBin, args: [mcpEntryPath] };
+      if (cursorServers["steer-agent-tool"]) delete cursorServers["steer-agent-tool"];
+      fs.writeFileSync(cursorMcpPath, JSON.stringify(cursorMcp, null, 2));
+      results.push({ label: "MCP server (Cursor)", status: "fixed", message: "Registered in ~/.cursor/mcp.json" });
+    } else if (!hasMcpEntry) {
+      results.push({ label: "MCP server (Cursor)", status: "warn", message: "mcp-entry.js not found", fix: "Run: steer-agent install" });
+    } else {
+      results.push({ label: "MCP server (Cursor)", status: "ok", message: "steer-agent registered in mcp.json" });
+    }
   }
 
   // 2. Skills — check symlinks
@@ -139,8 +168,10 @@ export async function runDoctor(): Promise<void> {
     if (!settings.hooks) (settings as Record<string, unknown>).hooks = {};
     const h = settings.hooks as Record<string, unknown>;
     if (!h.UserPromptSubmit) h.UserPromptSubmit = [];
+    const hookAbsPath = path.join(__dirname, "hooks", "prompt-submit.js");
+    const hookCmd = fs.existsSync(hookAbsPath) ? `${nodeBin} ${hookAbsPath}` : "steer-hook-prompt";
     (h.UserPromptSubmit as Array<unknown>).push({
-      hooks: [{ type: "command", command: "steer-hook-prompt", timeout: 5000 }],
+      hooks: [{ type: "command", command: hookCmd, timeout: 5000 }],
     });
     settingsChanged = true;
     results.push({ label: "UserPromptSubmit hook", status: "fixed", message: "Was missing — registered steer-hook-prompt" });

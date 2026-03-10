@@ -114,22 +114,36 @@ function main() {
 
     let changed = false;
 
-    // ── Register MCP server (absolute path via node) ──
+    // ── Register MCP server (absolute node path so it works without nvm in PATH) ──
+    const nodeBin = process.execPath || 'node';
     if (!settings.mcpServers) settings.mcpServers = {};
-    if (!settings.mcpServers['steer-agent']) {
-      settings.mcpServers['steer-agent'] = { command: 'node', args: [mcpBin], env: {} };
+    const wantedMcp = { command: nodeBin, args: [mcpBin], env: {} };
+    const existingMcp = settings.mcpServers['steer-agent'];
+    // Always update if command or args differ (fixes bare "node" → absolute path)
+    if (!existingMcp || existingMcp.command !== nodeBin || (Array.isArray(existingMcp.args) ? existingMcp.args[0] : null) !== mcpBin) {
+      settings.mcpServers['steer-agent'] = wantedMcp;
       changed = true;
-      log('✅ MCP server registered');
+      log('✅ MCP server registered (Claude Code)');
     } else {
-      // Update binary path if stale
-      const existing = settings.mcpServers['steer-agent'];
-      const existingBin = Array.isArray(existing.args) ? existing.args[0] : null;
-      if (existingBin !== mcpBin) {
-        settings.mcpServers['steer-agent'] = { command: 'node', args: [mcpBin], env: {} };
-        changed = true;
-        log('✅ MCP server path updated');
+      log('✅ MCP server already registered (Claude Code)');
+    }
+
+    // ── Register MCP server in Cursor (~/.cursor/mcp.json) ──
+    const cursorDir = path.join(HOME, '.cursor');
+    const cursorMcpPath = path.join(cursorDir, 'mcp.json');
+    if (fs.existsSync(cursorDir)) {
+      let cursorMcp = {};
+      try { cursorMcp = JSON.parse(fs.readFileSync(cursorMcpPath, 'utf8')); } catch {}
+      if (!cursorMcp.mcpServers) cursorMcp.mcpServers = {};
+      const cursorExisting = cursorMcp.mcpServers['steer-agent'];
+      if (!cursorExisting || cursorExisting.command !== nodeBin || (Array.isArray(cursorExisting.args) ? cursorExisting.args[0] : null) !== mcpBin) {
+        cursorMcp.mcpServers['steer-agent'] = { command: nodeBin, args: [mcpBin] };
+        // Remove old name if present
+        if (cursorMcp.mcpServers['steer-agent-tool']) delete cursorMcp.mcpServers['steer-agent-tool'];
+        fs.writeFileSync(cursorMcpPath, JSON.stringify(cursorMcp, null, 2));
+        log('✅ MCP server registered (Cursor)');
       } else {
-        log('✅ MCP server already registered');
+        log('✅ MCP server already registered (Cursor)');
       }
     }
 
@@ -154,7 +168,7 @@ function main() {
         settings.hooks.UserPromptSubmit.push({
           hooks: [{
             type: 'command',
-            command: 'node ' + hookBin,
+            command: nodeBin + ' ' + hookBin,
             timeout: 5000,
           }],
         });
