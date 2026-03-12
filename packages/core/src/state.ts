@@ -1,4 +1,5 @@
 import { Mode, HookResult, PlanStep, VerificationResult, LearningEntry, ImpactPreview } from "./types.js";
+import type { AttemptRecord } from "./gitBranch.js";
 
 export type StepName =
   | "idle"
@@ -56,6 +57,13 @@ export interface TaskState {
   ragSources?: Array<{ file: string; score: number; chunk: string }>;
   commitMessage?: string;
   prDescription?: string;
+
+  // Git branch execution
+  attempt: number;
+  maxAttempts: number;
+  originBranch?: string;
+  executionBranch?: string;
+  attemptHistory: AttemptRecord[];
 }
 
 export const INITIAL_STATE: TaskState = {
@@ -83,6 +91,9 @@ export const INITIAL_STATE: TaskState = {
   hookResults: [],
   planSteps: [],
   learningNotes: [],
+  attempt: 0,
+  maxAttempts: 3,
+  attemptHistory: [],
 };
 
 export function createNewTask(taskId: string, mode: Mode): TaskState {

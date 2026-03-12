@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync } from "fs";
 import { join } from "path";
-import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, completeTask, steerDirExists, logToolCall } from "@steer-agent-tool/core";
+import { extractLearnings, persistLearnings, updateKnowledgeFile, transitionStep, completeTask, steerDirExists, logToolCall, emitAndSync } from "@steer-agent-tool/core";
 
 export const LearnSchema = {
   taskId: z.string().describe("Task ID to extract learnings from"),
@@ -49,7 +49,9 @@ export async function handleLearn(args: { taskId: string; cwd?: string }) {
     // Transition to done
     const final = transitionStep(afterLearning, "done");
     final.resumable = false;
-    writeFileSync(statePath, JSON.stringify(final, null, 2));
+    const durationMs = final.startedAt ? Date.now() - new Date(final.startedAt).getTime() : 0;
+    emitAndSync(cwd, { taskId: args.taskId, type: "learning_extracted", payload: { learnings, modules: [...byModule.keys()] } }, final);
+    emitAndSync(cwd, { taskId: args.taskId, type: "task_completed", payload: { fpcr: historyEntry.fpcr, durationMs, round: historyEntry.round } }, final);
 
     try { logToolCall("steer.learn.done", { taskId: args.taskId, learnings: learnings.length, fpcr: historyEntry.fpcr, durationMs: historyEntry.durationMs }, cwd); } catch {}
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import type { RouteResult } from "@steer-agent-tool/core";
+import type { RouteResult, SteerConfig } from "@steer-agent-tool/core";
 import {
   transitionStep,
   assemblePrompt,
@@ -23,6 +23,12 @@ import {
   steerDirExists,
   loadIndex,
   searchChunks,
+  emitAndSync,
+  getCurrentBranch,
+  createAttemptBranch,
+  mergeAttemptBranch,
+  deleteAttemptBranch,
+  runBuildChecks,
 } from "@steer-agent-tool/core";
 import type { TaskState, AssemblyContext } from "@steer-agent-tool/core";
 
@@ -191,8 +197,12 @@ function planPhase(state: TaskState, statePath: string, cwd: string, args: RunAr
   state.modelTier = routeResult.tier;
   state.modelReason = routeResult.reason;
 
-  // Persist state
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  // Persist state + emit event
+  emitAndSync(cwd, {
+    taskId: state.taskId,
+    type: "plan_created",
+    payload: { steps, impact },
+  }, state);
 
   return {
     content: [{
@@ -219,9 +229,29 @@ function planPhase(state: TaskState, statePath: string, cwd: string, args: RunAr
 // Phase 2: execution → reflection → verification → learning → done
 // ──────────────────────────────────────────────────────────────────
 function executePhase(state: TaskState, statePath: string, cwd: string, args: RunArgs) {
+  // Load config for git branch settings
+  const configPath = join(cwd, ".steer", "config.json");
+  let config: SteerConfig | undefined;
+  if (existsSync(configPath)) {
+    try { config = JSON.parse(readFileSync(configPath, "utf-8")); } catch {}
+  }
+  const gitBranchEnabled = config?.execution?.gitBranch === true;
+
   // ── Step 3→4: planning → execution ──
+  if (gitBranchEnabled && !state.executionBranch) {
+    const originBranch = getCurrentBranch(cwd);
+    const attempt = (state.attempt || 0) + 1;
+    const branch = createAttemptBranch(cwd, args.taskId, attempt);
+    state.originBranch = originBranch;
+    state.executionBranch = branch;
+    state.attempt = attempt;
+    state.maxAttempts = config?.execution?.maxAttempts ?? 3;
+    state.attemptHistory = state.attemptHistory || [];
+    state.attemptHistory.push({ attempt, branch, startedAt: new Date().toISOString(), outcome: "pending" });
+  }
+
   state = transitionStep(state, "execution");
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  emitAndSync(cwd, { taskId: state.taskId, type: "step_started", payload: { step: "execution", stepNumber: 4 } }, state);
 
   // ── Step 4→5: execution → reflection ──
   const hooks = loadHooks(cwd);
@@ -229,13 +259,63 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
   state.reflectionPassed = reflectionResult.passed;
   state.reflectionIssues = reflectionResult.issues;
   state = transitionStep(state, "reflection");
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  emitAndSync(cwd, { taskId: state.taskId, type: "step_started", payload: { step: "reflection", stepNumber: 5 } }, state);
 
   // ── Step 5→6: reflection → verification ──
   const verificationResult = runVerification(state, hooks, cwd);
+
+  // If git branch enabled, also run build checks
+  let buildResult: ReturnType<typeof runBuildChecks> | undefined;
+  if (gitBranchEnabled) {
+    buildResult = runBuildChecks(cwd);
+  }
+  const overallPassed = verificationResult.passed && (buildResult ? buildResult.passed : true);
+
   state.verificationOutcome = verificationResult;
   state = transitionStep(state, "verification");
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+
+  // Handle git branch merge/retry
+  if (gitBranchEnabled && state.executionBranch) {
+    const originBranch = state.originBranch!;
+    const executionBranch = state.executionBranch;
+    const attempt = state.attempt || 1;
+    const maxAttempts = state.maxAttempts || 3;
+    const mergeStrategy = config?.execution?.mergeStrategy || "squash";
+
+    // Update attempt history
+    const currentAttempt = (state.attemptHistory || []).find((a: any) => a.attempt === attempt);
+    if (currentAttempt) {
+      currentAttempt.endedAt = new Date().toISOString();
+      currentAttempt.outcome = overallPassed ? "passed" : "failed";
+    }
+
+    if (!overallPassed && attempt < maxAttempts) {
+      // Retry: delete branch, create new attempt, loop back to execution
+      deleteAttemptBranch(cwd, executionBranch, originBranch);
+      const nextAttempt = attempt + 1;
+      const newBranch = createAttemptBranch(cwd, args.taskId, nextAttempt);
+      state.attempt = nextAttempt;
+      state.executionBranch = newBranch;
+      state.attemptHistory.push({ attempt: nextAttempt, branch: newBranch, startedAt: new Date().toISOString(), outcome: "pending" });
+
+      emitAndSync(cwd, { taskId: state.taskId, type: "execution_attempt_failed", payload: { attempt, branch: executionBranch, reason: "Verification/build failed" } }, state);
+
+      // Recurse back into executePhase for the retry
+      return executePhase(state, statePath, cwd, args);
+    }
+
+    if (overallPassed) {
+      mergeAttemptBranch(cwd, executionBranch, originBranch, mergeStrategy);
+      state.executionBranch = undefined;
+    } else {
+      // Max attempts exhausted
+      deleteAttemptBranch(cwd, executionBranch, originBranch);
+      state.executionBranch = undefined;
+      emitAndSync(cwd, { taskId: state.taskId, type: "execution_attempt_failed", payload: { attempt, branch: executionBranch, reason: `Max attempts (${maxAttempts}) reached` } }, state);
+    }
+  }
+
+  emitAndSync(cwd, { taskId: state.taskId, type: "verification_completed", payload: { passed: overallPassed, checks: verificationResult.checks || [], summary: verificationResult.summary || "" } }, state);
 
   // ── Step 6→7: verification → learning ──
   const learnings = extractLearnings(state);
@@ -253,7 +333,7 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
 
   state.learningNotes = learnings;
   state = transitionStep(state, "learning");
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  emitAndSync(cwd, { taskId: state.taskId, type: "learning_extracted", payload: { learnings, modules: [...byModule.keys()] } }, state);
 
   // ── Step 7→8: learning → done ──
   completeTask(state, cwd);
@@ -263,7 +343,8 @@ function executePhase(state: TaskState, statePath: string, cwd: string, args: Ru
 
   state = transitionStep(state, "done");
   state.resumable = false;
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  const durationMs = state.startedAt ? Date.now() - new Date(state.startedAt).getTime() : 0;
+  emitAndSync(cwd, { taskId: state.taskId, type: "task_completed", payload: { fpcr: state.round <= 1, durationMs, round: state.round } }, state);
 
   // Build sub-agent instructions if split was recommended
   const subAgentInstructions = state.subAgentDecision?.shouldSplit

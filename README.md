@@ -220,7 +220,8 @@ steer-init, steer-status
 │  ├── templates/            — prompt templates per mode  │
 │  ├── knowledge/            — compounding learnings (git)│
 │  └── state/                — runtime (gitignored)       │
-│      ├── current-task.json — active task state           │
+│      ├── current-task.json — materialized task state     │
+│      ├── events.jsonl      — append-only event log       │
 │      ├── history.jsonl     — FPCR telemetry             │
 │      └── steer.log         — execution log              │
 └─────────────────────────────────────────────────────────┘
@@ -236,6 +237,9 @@ packages/core/src/
 ├── completion.ts        — model routing + tier selection
 ├── generateFollowUps.ts — follow-up question generation
 ├── promptAssembler.ts   — template + RAG + context → final prompt
+├── events.ts            — 14 event types (discriminated union)
+├── eventStore.ts        — append-only event log + materialized state
+├── gitBranch.ts         — git branch per attempt execution
 ├── rag/
 │   ├── chunker.ts       — splits files into chunks + keyword extraction
 │   ├── indexer.ts       — TF-IDF index builder (buildIndex/loadIndex)
@@ -244,6 +248,30 @@ packages/core/src/
 ├── codemap.ts           — codebase intelligence
 └── state.ts             — current-task.json read/write
 ```
+
+### Event Sourcing
+
+Every state mutation emits an event to `.steer/state/events.jsonl` (append-only JSONL). `current-task.json` is a **materialized view** rebuilt on each emit — the extension sidebar continues polling it unchanged.
+
+14 event types: `task_created`, `step_started`, `step_completed`, `rag_retrieved`, `model_routed`, `gate_scored`, `plan_created`, `plan_approved`, `execution_started`, `execution_attempt_failed`, `hook_executed`, `verification_completed`, `learning_extracted`, `task_completed`.
+
+Events enable replay (`replayEvents`), state reconstruction (`materializeState`), auditing, and debugging without losing history.
+
+### Git Branch Execution (Optional)
+
+When enabled in `.steer/config.json`, Step 4 (Execution) creates an isolated git branch per attempt:
+
+```json
+{
+  "execution": {
+    "gitBranch": true,
+    "maxAttempts": 3,
+    "mergeStrategy": "squash"
+  }
+}
+```
+
+**Flow:** `steer.execute` creates `steer/{taskId}-attempt-{n}` → AI writes code on branch → `steer.verify` runs build+lint+test → **pass**: squash merge back to origin → **fail**: delete branch, create new attempt (up to `maxAttempts`).
 
 ### 8-Step Workflow — Data Flow
 
@@ -464,7 +492,8 @@ After install, these work in Claude Code chat:
   templates/              <- prompt templates per mode (bugfix, feature, refactor...)
   knowledge/              <- compounding team knowledge (grows with every task)
   state/                  <- runtime state (gitignored)
-    current-task.json     <- single source of truth for active task
+    current-task.json     <- materialized task state
+    events.jsonl          <- append-only event log
     history.jsonl         <- FPCR telemetry
     learnings.jsonl       <- raw learning entries
 ```

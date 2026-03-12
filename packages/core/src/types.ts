@@ -240,4 +240,9 @@ export interface SteerConfig {
   routing?: {
     defaultTier?: "small" | "mid" | "high";
   };
+  execution?: {
+    gitBranch?: boolean;
+    maxAttempts?: number;            // default: 3
+    mergeStrategy?: "squash" | "ff" | "rebase";  // default: "squash"
+  };
 }

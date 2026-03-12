@@ -9,6 +9,7 @@ import { findSimilarTasks } from "./similarTasks.js";
 import { loadIndex } from "./rag/indexer.js";
 import { searchChunks } from "./rag/retriever.js";
 import { logSteer } from "./logger.js";
+import { emitAndSync } from "./eventStore.js";
 import { exec } from "child_process";
 import util from "util";
 
@@ -168,10 +169,13 @@ export async function startTask(options: StartOptions) {
   const postContextResults = runHooks("post-context", hooks, cwd);
   state.hookResults.push(...postContextResults);
 
-  // 6. Save State
-  const statePath = path.join(steerDir, "state", "current-task.json");
-  await fs.ensureDir(path.dirname(statePath));
-  await fs.writeJSON(statePath, state, { spaces: 2 });
+  // 6. Save State + emit task_created event
+  await fs.ensureDir(path.join(steerDir, "state"));
+  emitAndSync(cwd, {
+    taskId,
+    type: "task_created",
+    payload: { mode, goal: initialMessage, initialMessage, files: resolvedFileList },
+  }, state);
 
   return {
     state,

@@ -89,3 +89,30 @@ export type { SearchResult } from "./rag/retriever.js";
 
 // Path resolution
 export { findSteerDir, steerDirExists } from "./paths.js";
+
+// Git branch execution
+export { getCurrentBranch, isWorkingTreeClean, createAttemptBranch, deleteAttemptBranch, mergeAttemptBranch, runBuildChecks } from "./gitBranch.js";
+export type { AttemptRecord, BuildCheckResult } from "./gitBranch.js";
+
+// Event sourcing
+export { emitEvent, emitAndSync, replayEvents, materializeState, applyEvent, readEventsFile, archiveEvents } from "./eventStore.js";
+export type {
+  EventType,
+  BaseEvent,
+  SteerEvent,
+  EventInput,
+  TaskCreatedEvent,
+  StepStartedEvent,
+  StepCompletedEvent,
+  RagRetrievedEvent,
+  ModelRoutedEvent,
+  GateScoredEvent,
+  PlanCreatedEvent,
+  PlanApprovedEvent,
+  ExecutionStartedEvent,
+  ExecutionAttemptFailedEvent,
+  HookExecutedEvent,
+  VerificationCompletedEvent,
+  LearningExtractedEvent,
+  TaskCompletedEvent,
+} from "./events.js";

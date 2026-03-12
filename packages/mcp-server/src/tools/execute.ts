@@ -1,7 +1,15 @@
 import { z } from "zod";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { transitionStep, steerDirExists, logToolCall } from "@steer-agent-tool/core";
+import {
+  transitionStep,
+  steerDirExists,
+  logToolCall,
+  emitAndSync,
+  getCurrentBranch,
+  createAttemptBranch,
+} from "@steer-agent-tool/core";
+import type { SteerConfig } from "@steer-agent-tool/core";
 
 export const ExecuteSchema = {
   taskId: z.string().describe("Task ID to execute"),
@@ -30,8 +38,36 @@ export async function handleExecute(args: { taskId: string; approved?: boolean; 
 
     try { logToolCall("steer.execute", { taskId: args.taskId, approved: args.approved, goal: state.goal }, cwd); } catch {}
 
+    // Load config for git branch settings
+    const configPath = join(cwd, ".steer", "config.json");
+    let config: SteerConfig | undefined;
+    if (existsSync(configPath)) {
+      try { config = JSON.parse(readFileSync(configPath, "utf-8")); } catch {}
+    }
+
+    const gitBranchEnabled = config?.execution?.gitBranch === true;
+    let executionBranch: string | undefined;
+
+    if (gitBranchEnabled) {
+      const originBranch = getCurrentBranch(cwd);
+      const attempt = (state.attempt || 0) + 1;
+      executionBranch = createAttemptBranch(cwd, args.taskId, attempt);
+
+      state.originBranch = originBranch;
+      state.executionBranch = executionBranch;
+      state.attempt = attempt;
+      state.maxAttempts = config?.execution?.maxAttempts ?? 3;
+      state.attemptHistory = state.attemptHistory || [];
+      state.attemptHistory.push({
+        attempt,
+        branch: executionBranch,
+        startedAt: new Date().toISOString(),
+        outcome: "pending",
+      });
+    }
+
     const updated = transitionStep(state, "execution");
-    writeFileSync(statePath, JSON.stringify(updated, null, 2));
+    emitAndSync(cwd, { taskId: args.taskId, type: "execution_started", payload: {} }, updated);
 
     return {
       content: [{
@@ -40,6 +76,7 @@ export async function handleExecute(args: { taskId: string; approved?: boolean; 
           status: "executing",
           taskId: args.taskId,
           goal: state.goal || "",
+          ...(gitBranchEnabled && { branch: executionBranch, attempt: state.attempt, maxAttempts: state.maxAttempts }),
           message: "Implement the following plan steps. When done, call steer.verify to check results.",
           implementationSteps: (state.planSteps || []).map((s: any) => ({
             id: s.id,

@@ -8,7 +8,7 @@
  * and outputs JSON to stdout.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import {
   startTask,
@@ -31,8 +31,9 @@ import {
   loadModuleKnowledge,
   loadIndex,
   searchChunks,
+  emitAndSync,
 } from "@steer-agent-tool/core";
-import type { TaskState, AssemblyContext, RouteResult } from "@steer-agent-tool/core";
+import type { TaskState, AssemblyContext, RouteResult, EventInput } from "@steer-agent-tool/core";
 
 // ── Arg parser ─────────────────────────────────────────────────────
 
@@ -86,9 +87,9 @@ function loadState(cwd: string): { state: TaskState; statePath: string } {
   return { state, statePath };
 }
 
-function saveState(statePath: string, state: TaskState): void {
-  mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+function saveState(cwd: string, state: TaskState, event: EventInput): void {
+  mkdirSync(join(cwd, ".steer", "state"), { recursive: true });
+  emitAndSync(cwd, event, state);
 }
 
 // ── Subcommands ────────────────────────────────────────────────────
@@ -144,7 +145,7 @@ async function cmdPlan(flags: Record<string, string | boolean>): Promise<void> {
   state.impactPreview = impact;
 
   state = transitionStep(state, "planning");
-  saveState(statePath, state);
+  saveState(cwd, state, { taskId: state.taskId, type: "plan_created", payload: { steps, impact } });
 
   output({
     status: "planned",
@@ -168,7 +169,7 @@ async function cmdExecute(flags: Record<string, string | boolean>): Promise<void
   }
 
   state = transitionStep(state, "execution");
-  saveState(statePath, state);
+  saveState(cwd, state, { taskId: state.taskId, type: "execution_started", payload: {} });
 
   output({
     status: "executing",
@@ -196,7 +197,7 @@ async function cmdVerify(flags: Record<string, string | boolean>): Promise<void>
   const result = runVerification(state, hooks, cwd);
   state.verificationOutcome = result;
   state = transitionStep(state, "verification");
-  saveState(statePath, state);
+  saveState(cwd, state, { taskId: state.taskId, type: "verification_completed", payload: { passed: result.passed, checks: result.checks || [], summary: result.summary || "" } });
 
   output({
     status: "verified",
@@ -227,7 +228,7 @@ async function cmdLearn(flags: Record<string, string | boolean>): Promise<void> 
 
   state.learningNotes = learnings;
   state = transitionStep(state, "learning");
-  saveState(statePath, state);
+  saveState(cwd, state, { taskId: state.taskId, type: "learning_extracted", payload: { learnings, modules: [...byModule.keys()] } });
 
   output({
     status: "learned",
@@ -282,19 +283,19 @@ async function cmdRun(flags: Record<string, string | boolean>): Promise<void> {
   // Phase 2: execute approved plan
   if (flags.approved === true || flags.approved === "true") {
     state = transitionStep(state, "execution");
-    saveState(statePath, state);
+    saveState(cwd, state, { taskId: state.taskId, type: "step_started", payload: { step: "execution", stepNumber: 4 } });
 
     const hooks = loadHooks(cwd);
     const reflectionResult = runReflection(state, cwd, hooks);
     state.reflectionPassed = reflectionResult.passed;
     state.reflectionIssues = reflectionResult.issues;
     state = transitionStep(state, "reflection");
-    saveState(statePath, state);
+    saveState(cwd, state, { taskId: state.taskId, type: "step_started", payload: { step: "reflection", stepNumber: 5 } });
 
     const verificationResult = runVerification(state, hooks, cwd);
     state.verificationOutcome = verificationResult;
     state = transitionStep(state, "verification");
-    saveState(statePath, state);
+    saveState(cwd, state, { taskId: state.taskId, type: "verification_completed", payload: { passed: verificationResult.passed, checks: verificationResult.checks || [], summary: verificationResult.summary || "" } });
 
     const learnings = extractLearnings(state);
     persistLearnings(learnings, cwd);
@@ -309,7 +310,7 @@ async function cmdRun(flags: Record<string, string | boolean>): Promise<void> {
     }
     state.learningNotes = learnings;
     state = transitionStep(state, "learning");
-    saveState(statePath, state);
+    saveState(cwd, state, { taskId: state.taskId, type: "learning_extracted", payload: { learnings, modules: [...byModule.keys()] } });
 
     completeTask(state, cwd);
     const commitMsg = generateCommitMessage(state);
@@ -317,7 +318,8 @@ async function cmdRun(flags: Record<string, string | boolean>): Promise<void> {
 
     state = transitionStep(state, "done");
     state.resumable = false;
-    saveState(statePath, state);
+    const durationMs = state.startedAt ? Date.now() - new Date(state.startedAt).getTime() : 0;
+    saveState(cwd, state, { taskId: state.taskId, type: "task_completed", payload: { fpcr: state.round <= 1, durationMs, round: state.round } });
 
     output({
       phase: "execute",
@@ -399,7 +401,7 @@ async function cmdRun(flags: Record<string, string | boolean>): Promise<void> {
   state.modelTier = routeResult.tier;
   state.modelReason = routeResult.reason;
 
-  saveState(statePath, state);
+  saveState(cwd, state, { taskId: state.taskId, type: "plan_created", payload: { steps, impact } });
 
   output({
     phase: "plan",

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { buildPlan, transitionStep, steerDirExists, logToolCall } from "@steer-agent-tool/core";
+import { buildPlan, transitionStep, steerDirExists, logToolCall, emitAndSync } from "@steer-agent-tool/core";
 
 export const PlanSchema = {
   taskId: z.string().describe("Task ID to create a plan for"),
@@ -47,7 +47,7 @@ export async function handlePlan(args: { taskId: string; goal: string; files?: s
       current = transitionStep(current, "prompt");
     }
     const updated = transitionStep(current, "planning");
-    writeFileSync(statePath, JSON.stringify(updated, null, 2));
+    emitAndSync(cwd, { taskId: args.taskId, type: "plan_created", payload: { steps, impact } }, updated);
 
     try { logToolCall("steer.plan.done", { taskId: args.taskId, planSteps: steps.length, impactFiles: impact?.filesAffected?.length }, cwd); } catch {}
 

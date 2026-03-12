@@ -23,9 +23,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { gate } from "./gate.js";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { VERSION, logToolCall } from "@steer-agent-tool/core";
+import { VERSION, logToolCall, emitAndSync } from "@steer-agent-tool/core";
 import { InitSchema, handleInit } from "./tools/init.js";
 import { StartSchema, handleStart } from "./tools/start.js";
 import { PlanSchema, handlePlan } from "./tools/plan.js";
@@ -87,7 +87,7 @@ async function handleGate(args: {
       if (existsSync(statePath) && result.modelSuggestion?.tier) {
         const state = JSON.parse(readFileSync(statePath, "utf-8"));
         state.modelTier = result.modelSuggestion.tier;
-        writeFileSync(statePath, JSON.stringify(state, null, 2));
+        emitAndSync(cwd, { taskId: result.taskId, type: "gate_scored", payload: { score: result.score, status: result.status, modelTier: result.modelSuggestion.tier } }, state);
       }
     } catch {}
 
